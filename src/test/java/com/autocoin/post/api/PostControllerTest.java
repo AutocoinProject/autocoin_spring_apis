@@ -2,11 +2,13 @@ package com.autocoin.post.api;
 
 import com.autocoin.config.TestConfig;
 import com.autocoin.config.TestJpaConfig;
+import com.autocoin.global.auth.provider.JwtTokenProvider;
 import com.autocoin.global.exception.business.ResourceNotFoundException;
 import com.autocoin.post.api.controller.PostController;
 import com.autocoin.post.application.service.PostService;
 import com.autocoin.post.dto.request.PostRequestDto;
 import com.autocoin.post.dto.response.PostResponseDto;
+import com.autocoin.user.application.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -50,6 +52,12 @@ class PostControllerTest {
 
     @MockBean
     private PostService postService;
+
+    @MockBean
+    private JwtTokenProvider jwtTokenProvider;
+
+    @MockBean
+    private UserService userService;
 
     @Test
     @DisplayName("게시글 생성 API 테스트")

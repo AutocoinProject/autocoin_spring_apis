@@ -1,8 +1,8 @@
 package com.autocoin.news.service;
 
-import com.autocoin.news.config.NewsApiConfig;
 import com.autocoin.news.domain.entity.CryptoNews;
 import com.autocoin.news.dto.CryptoNewsDto;
+import com.autocoin.news.infrastructure.external.SerpApiClient;
 import com.autocoin.news.infrastructure.repository.CryptoNewsRepository;
 import com.autocoin.news.application.service.CryptoNewsService;
 import org.junit.jupiter.api.DisplayName;
@@ -14,13 +14,13 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -32,10 +32,7 @@ import static org.mockito.Mockito.*;
 public class CryptoNewsServiceTest {
 
     @Mock
-    private RestTemplate restTemplate;
-
-    @Mock
-    private NewsApiConfig newsApiConfig;
+    private SerpApiClient serpApiClient;
 
     @Mock
     private CryptoNewsRepository cryptoNewsRepository;
@@ -50,11 +47,9 @@ public class CryptoNewsServiceTest {
     @DisplayName("SerpAPI에서 뉴스 가져오기 성공 테스트")
     void getCryptoNewsSuccess() {
         // given
-        String apiUrl = "https://serpapi.com/search.json?q=crypto+news&tbm=nws&api_key=test-key";
-        String mockApiResponse = createMockApiResponse();
+        Map<String, Object> mockApiResponse = createMockApiResponseMap();
         
-        given(newsApiConfig.getSerpApiUrl()).willReturn(apiUrl);
-        given(restTemplate.getForObject(eq(apiUrl), eq(String.class))).willReturn(mockApiResponse);
+        given(serpApiClient.fetchCryptoNews()).willReturn(mockApiResponse);
         given(cryptoNewsRepository.existsByLink(anyString())).willReturn(false);
         given(cryptoNewsRepository.save(any(CryptoNews.class))).willAnswer(invocation -> {
             CryptoNews news = invocation.getArgument(0);
@@ -78,8 +73,7 @@ public class CryptoNewsServiceTest {
         assertThat(result.get(0).getTitle()).isEqualTo("뉴스 제목 1");
         assertThat(result.get(1).getTitle()).isEqualTo("뉴스 제목 2");
         
-        verify(newsApiConfig, times(1)).getSerpApiUrl();
-        verify(restTemplate, times(1)).getForObject(eq(apiUrl), eq(String.class));
+        verify(serpApiClient, times(1)).fetchCryptoNews();
         verify(cryptoNewsRepository, times(2)).existsByLink(anyString());
         verify(cryptoNewsRepository, times(2)).save(any(CryptoNews.class));
     }
@@ -88,19 +82,15 @@ public class CryptoNewsServiceTest {
     @DisplayName("API 호출 실패 시 예외 발생 테스트")
     void getCryptoNewsApiFailure() {
         // given
-        String apiUrl = "https://serpapi.com/search.json?q=crypto+news&tbm=nws&api_key=test-key";
-        
-        given(newsApiConfig.getSerpApiUrl()).willReturn(apiUrl);
-        given(restTemplate.getForObject(eq(apiUrl), eq(String.class)))
-                .willThrow(new RestClientException("API 호출 실패"));
+        given(serpApiClient.fetchCryptoNews())
+                .willThrow(new RuntimeException("API 호출 실패"));
 
         // when & then
         assertThatThrownBy(() -> cryptoNewsService.getCryptoNews())
                 .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("뉴스 데이터를 가져오는데 실패했습니다");
+                .hasMessageContaining("뉴스 데이터 처리 중 오류가 발생했습니다");
         
-        verify(newsApiConfig, times(1)).getSerpApiUrl();
-        verify(restTemplate, times(1)).getForObject(eq(apiUrl), eq(String.class));
+        verify(serpApiClient, times(1)).fetchCryptoNews();
         verifyNoInteractions(cryptoNewsRepository);
     }
 
@@ -108,11 +98,9 @@ public class CryptoNewsServiceTest {
     @DisplayName("이미 존재하는 뉴스는 저장하지 않는 테스트")
     void getCryptoNewsSkipExistingLinks() {
         // given
-        String apiUrl = "https://serpapi.com/search.json?q=crypto+news&tbm=nws&api_key=test-key";
-        String mockApiResponse = createMockApiResponse();
+        Map<String, Object> mockApiResponse = createMockApiResponseMap();
         
-        given(newsApiConfig.getSerpApiUrl()).willReturn(apiUrl);
-        given(restTemplate.getForObject(eq(apiUrl), eq(String.class))).willReturn(mockApiResponse);
+        given(serpApiClient.fetchCryptoNews()).willReturn(mockApiResponse);
         // 첫 번째 뉴스는 이미 존재함, 두 번째 뉴스는 존재하지 않음
         given(cryptoNewsRepository.existsByLink("https://example.com/news-1")).willReturn(true);
         given(cryptoNewsRepository.existsByLink("https://example.com/news-2")).willReturn(false);
@@ -270,24 +258,28 @@ public class CryptoNewsServiceTest {
                 .build();
     }
 
-    private String createMockApiResponse() {
-        return "{" +
-                "\"news_results\": [" +
-                "  {" +
-                "    \"title\": \"뉴스 제목 1\"," +
-                "    \"link\": \"https://example.com/news-1\"," +
-                "    \"source\": \"뉴스 소스 1\"," +
-                "    \"date\": \"2023-05-20\"," +
-                "    \"thumbnail\": \"https://example.com/thumbnail-1.jpg\"" +
-                "  }," +
-                "  {" +
-                "    \"title\": \"뉴스 제목 2\"," +
-                "    \"link\": \"https://example.com/news-2\"," +
-                "    \"source\": \"뉴스 소스 2\"," +
-                "    \"date\": \"2023-05-19\"," +
-                "    \"thumbnail\": \"https://example.com/thumbnail-2.jpg\"" +
-                "  }" +
-                "]" +
-                "}";
+    private Map<String, Object> createMockApiResponseMap() {
+        List<Map<String, Object>> newsResults = new ArrayList<>();
+        
+        Map<String, Object> news1 = new HashMap<>();
+        news1.put("title", "뉴스 제목 1");
+        news1.put("link", "https://example.com/news-1");
+        news1.put("source", "뉴스 소스 1");
+        news1.put("date", "2023-05-20");
+        news1.put("thumbnail", "https://example.com/thumbnail-1.jpg");
+        newsResults.add(news1);
+        
+        Map<String, Object> news2 = new HashMap<>();
+        news2.put("title", "뉴스 제목 2");
+        news2.put("link", "https://example.com/news-2");
+        news2.put("source", "뉴스 소스 2");
+        news2.put("date", "2023-05-19");
+        news2.put("thumbnail", "https://example.com/thumbnail-2.jpg");
+        newsResults.add(news2);
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("news_results", newsResults);
+        
+        return response;
     }
 }
