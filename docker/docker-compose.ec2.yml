@@ -1,0 +1,172 @@
+# EC2에서 Docker를 사용한 단순 배포를 위한 docker-compose
+version: '3.8'
+
+services:
+  # ====================================
+  # Autocoin Spring API (Main Application)
+  # ====================================
+  autocoin-api:
+    image: ${DOCKER_IMAGE:-ghcr.io/your-username/autocoin-api:latest}
+    container_name: autocoin-api-prod
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - API_PORT=8080
+      - SERVER_ADDRESS=0.0.0.0
+      
+      # Database (외부 MySQL 사용 가능)
+      - DB_HOST=${DB_HOST:-localhost}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_NAME=${DB_NAME:-autocoin}
+      - DB_USERNAME=${DB_USERNAME:-autocoin}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DDL_AUTO=validate
+      - HIBERNATE_SHOW_SQL=false
+      
+      # JWT Security
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION=${JWT_EXPIRATION:-3600000}
+      - JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION:-86400000}
+      
+      # OAuth2
+      - OAUTH2_ENABLED=${OAUTH2_ENABLED:-true}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - KAKAO_CLIENT_ID=${KAKAO_CLIENT_ID}
+      - KAKAO_CLIENT_SECRET=${KAKAO_CLIENT_SECRET}
+      
+      # AWS S3
+      - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
+      - AWS_SECRET_KEY=${AWS_SECRET_KEY}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET}
+      - AWS_REGION=${AWS_REGION:-ap-northeast-2}
+      
+      # Upbit
+      - UPBIT_ENCRYPTION_KEY=${UPBIT_ENCRYPTION_KEY}
+      - UPBIT_API_URL=https://api.upbit.com
+      - UPBIT_RATE_LIMIT_ENABLED=true
+      
+      # External APIs
+      - SERP_API_KEY=${SERP_API_KEY}
+      
+      # Monitoring
+      - MANAGEMENT_ENDPOINTS=health,info,metrics,prometheus
+      - MANAGEMENT_PROMETHEUS_ENABLED=true
+      - SENTRY_DSN=${SENTRY_DSN}
+      - SENTRY_ENVIRONMENT=production
+      
+      # Slack
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+      - SLACK_NOTIFICATIONS_ENABLED=true
+      
+      # CORS
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-https://autocoin.com,https://www.autocoin.com}
+      
+      # Redis (외부 Redis 사용 가능)
+      - REDIS_HOST=${REDIS_HOST:-localhost}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      
+      # Logging
+      - LOG_LEVEL_ROOT=WARN
+      - LOG_LEVEL_AUTOCOIN=INFO
+      
+    volumes:
+      - app-logs:/app/logs
+      - ./logs:/var/log/autocoin
+    networks:
+      - autocoin-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+  # ====================================
+  # MySQL Database (옵션 - 필요시)
+  # ====================================
+  mysql:
+    image: mysql:8.0
+    container_name: autocoin-mysql-prod
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${DB_NAME:-autocoin}
+      - MYSQL_USER=${DB_USERNAME:-autocoin}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+      - MYSQL_CHARACTER_SET_SERVER=utf8mb4
+      - MYSQL_COLLATION_SERVER=utf8mb4_unicode_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - autocoin-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+    command: [
+      '--character-set-server=utf8mb4',
+      '--collation-server=utf8mb4_unicode_ci',
+      '--default-authentication-plugin=mysql_native_password',
+      '--max_connections=200',
+      '--innodb_buffer_pool_size=256M'
+    ]
+    profiles:
+      - with-mysql
+
+  # ====================================
+  # Redis Cache (옵션 - 필요시)
+  # ====================================
+  redis:
+    image: redis:7.0-alpine
+    container_name: autocoin-redis-prod
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - autocoin-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-}
+    profiles:
+      - with-redis
+
+volumes:
+  mysql-data:
+    driver: local
+  redis-data:
+    driver: local
+  app-logs:
+    driver: local
+
+networks:
+  autocoin-network:
+    driver: bridge

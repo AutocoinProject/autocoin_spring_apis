@@ -1,0 +1,51 @@
+# 느린 API 응답 감지
+name: Slow API Response Alert
+type: frequency
+index: autocoin-logs-*
+num_events: 5
+timeframe:
+  minutes: 10
+
+filter:
+- term:
+    log_type: "api_request"
+- term:
+    slow_request: "true"
+
+alert:
+- "slack"
+
+slack:
+webhook_url: "YOUR_SLACK_WEBHOOK_URL"
+slack_channel_override: "#performance-alerts"
+slack_username_override: "ElastAlert"
+slack_emoji_override: ":snail:"
+slack_msg_color: "warning"
+
+alert_text: |
+  ⚠️ **Slow API Responses Detected**
+  
+  **Application**: Autocoin API
+  **Time Range**: Last 10 minutes
+  **Slow Request Count**: {0}
+  
+  **Details**:
+  - Endpoint: {1}
+  - Method: {2}
+  - Duration: {3}ms
+  - Status: {4}
+
+alert_text_args:
+  - num_matches
+  - endpoint
+  - http_method
+  - duration
+  - http_status
+
+include:
+  - timestamp
+  - endpoint
+  - http_method
+  - duration
+  - http_status
+  - client_ip

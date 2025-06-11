@@ -1,0 +1,102 @@
+# ====================================
+# Local Development Configuration
+# ====================================
+# 로컬 개발 환경 전용 설정 (H2 데이터베이스 사용)
+
+spring:
+  # H2 인메모리 데이터베이스 설정
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: 
+    driver-class-name: org.h2.Driver
+    
+    # HikariCP 설정 (로컬 개발용)
+    hikari:
+      pool-name: AutocoinHikariCP-Local
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 1200000
+
+  # H2 콘솔 활성화
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      settings:
+        web-allow-others: true
+
+  # JPA/Hibernate 설정 (로컬 개발용)
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.H2Dialect
+        jdbc:
+          batch_size: 20
+
+  # Redis 설정 (로컬 개발용 - 비활성화)
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: 
+      timeout: 3000ms
+
+  # 개발 도구 활성화
+  devtools:
+    restart:
+      enabled: true
+    livereload:
+      enabled: true
+
+# 로깅 설정 (로컬 개발용)
+logging:
+  level:
+    com.autocoin: DEBUG
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type: TRACE
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+# 모니터링 설정 (로컬 개발용)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health,info,metrics,prometheus,h2"
+  endpoint:
+    health:
+      show-details: always
+
+# Swagger 활성화 (로컬 개발용)
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+
+# CORS 설정 (로컬 개발용)
+cors:
+  allowed-origins: "http://localhost:3000,http://localhost:8080"
+
+# 로컬 개발용 더미 설정
+autocoin:
+  app:
+    init-enabled: false
+  aws:
+    s3:
+      enabled: false
+  oauth2:
+    enabled: false
+  news:
+    scheduler:
+      enabled: false

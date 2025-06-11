@@ -1,0 +1,69 @@
+# ====================================
+# Docker Compose for Local & Dev Environment
+# ====================================
+# 로컬 및 개발 환경용 Docker 컨테이너 구성
+
+version: '3.8'
+
+services:
+  # MySQL Database (Local Environment Only)
+  mysql:
+    image: mysql:8.0
+    container_name: autocoin-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: autocoin_db
+      MYSQL_USER: autocoin_user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --sql-mode=STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO
+    networks:
+      - autocoin-network
+
+  # Redis Cache (All Environments)
+  redis:
+    image: redis:7-alpine
+    container_name: autocoin-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - autocoin-network
+
+  # Redis Admin UI (Optional for Local)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: autocoin-redis-commander
+    restart: unless-stopped
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - autocoin-network
+    profiles:
+      - tools
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  autocoin-network:
+    driver: bridge

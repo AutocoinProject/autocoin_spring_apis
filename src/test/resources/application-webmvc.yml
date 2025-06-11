@@ -1,0 +1,48 @@
+# ===========================================
+# WebMvcTest 전용 설정 파일
+# ===========================================
+spring:
+  # 데이터베이스 관련 자동설정 제외
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
+      - org.springframework.boot.autoconfigure.task.TaskSchedulingAutoConfiguration
+  
+  # Bean 정의 재정의 허용
+  main:
+    allow-bean-definition-overriding: true
+  
+  # 스케줄링 비활성화
+  task:
+    scheduling:
+      enabled: false
+
+# JWT 테스트 설정 (WebMvcTest용)
+jwt:
+  secret: test-jwt-secret-key-for-testing-purposes-only-not-for-production-environment-minimum-32-characters
+  expiration: 1800000  # 30분
+
+# OAuth2 비활성화
+oauth2:
+  enabled: false
+
+# Sentry 비활성화
+sentry:
+  dsn: ""
+
+# CORS 설정
+cors:
+  allowed-origins: http://localhost:3000
+  allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+  allowed-headers: Authorization,Content-Type
+  max-age: 3600
+
+# 로깅 설정 (간소화)
+logging:
+  level:
+    com.autocoin: INFO
+    org.springframework.test: WARN
+    org.springframework.boot.test: WARN
+    org.springframework.security: INFO

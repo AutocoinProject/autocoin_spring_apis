@@ -1,0 +1,142 @@
+# ====================================
+# 모니터링 환경 설정 (Monitoring)
+# ====================================
+
+# Spring Boot Actuator 설정
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"  # 모든 endpoint 활성화
+      base-path: /actuator
+      cors:
+        allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:9090}
+        allowed-methods: GET,POST
+        allowed-headers: "*"
+  
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: db,diskSpace
+        liveness:
+          include: ping
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+    shutdown:
+      enabled: ${MANAGEMENT_SHUTDOWN_ENABLED:false}
+    env:
+      show-values: when-authorized
+
+  # Prometheus 메트릭 설정
+  metrics:
+    export:
+      prometheus:
+        enabled: ${PROMETHEUS_ENABLED:true}
+        step: ${PROMETHEUS_STEP:10s}
+    tags:
+      application: autocoin-api
+      environment: ${spring.profiles.active:local}
+      version: ${app.version:1.0.0}
+    web:
+      server:
+        request:
+          autotime:
+            enabled: true
+            percentiles: 0.5,0.9,0.95,0.99
+      client:
+        request:
+          autotime:
+            enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        http.client.requests: true
+        spring.data.repository.invocations: true
+      percentiles:
+        http.server.requests: 0.5, 0.9, 0.95, 0.99
+        http.client.requests: 0.5, 0.9, 0.95, 0.99
+      slo:
+        http.server.requests: 10ms,50ms,100ms,200ms,500ms
+        http.client.requests: 100ms,500ms,1s,2s,5s
+    enable:
+      jvm: true
+      system: true
+      process: true
+      tomcat: true
+      jdbc: true
+      hikaricp: true
+      logback: true
+
+  # Health Check 설정
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+  # 애플리케이션 정보
+  info:
+    build:
+      enabled: true
+    env:
+      enabled: true
+    git:
+      enabled: true
+      mode: full
+    java:
+      enabled: true
+    os:
+      enabled: true
+
+# Sentry 에러 트래킹 설정
+sentry:
+  dsn: ${SENTRY_DSN:}
+  environment: ${spring.profiles.active:local}
+  release: ${app.version:1.0.0}
+  traces-sample-rate: ${SENTRY_TRACES_SAMPLE_RATE:0.1}
+  debug: ${SENTRY_DEBUG:false}
+  send-default-pii: false
+  attach-stacktrace: true
+  attach-threads: ${SENTRY_ATTACH_THREADS:true}
+  enable-tracing: ${SENTRY_ENABLE_TRACING:true}
+  max-breadcrumbs: 100
+  max-cache-items: 30
+  in-app-includes:
+    - com.autocoin
+  ignored-exceptions-for-type:
+    - java.lang.IllegalArgumentException
+    - org.springframework.security.access.AccessDeniedException
+
+# 모니터링용 로깅 설정
+logging:
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+  level:
+    io.micrometer: ${LOG_LEVEL_MICROMETER:INFO}
+    io.sentry: ${LOG_LEVEL_SENTRY:INFO}
+    org.springframework.boot.actuator: ${LOG_LEVEL_ACTUATOR:INFO}
+    com.autocoin: ${LOG_LEVEL_AUTOCOIN:INFO}
+  file:
+    name: logs/autocoin-api.log
+    max-size: ${LOG_MAX_FILE_SIZE:10MB}
+    max-history: ${LOG_MAX_HISTORY:30}
+
+# 애플리케이션 정보 (Actuator Info Endpoint)
+info:
+  app:
+    name: Autocoin API
+    description: Cryptocurrency Auto Trading API
+    version: ${app.version:1.0.0}
+    encoding: UTF-8
+    java:
+      version: ${java.version}
+    build:
+      time: ${build.time:unknown}

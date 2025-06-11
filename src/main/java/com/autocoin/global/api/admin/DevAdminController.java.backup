@@ -1,0 +1,194 @@
+package com.autocoin.global.api.admin;
+
+import com.autocoin.global.util.PasswordEncoderUtil;
+import com.autocoin.user.domain.Role;
+import com.autocoin.user.domain.User;
+import com.autocoin.user.domain.UserRepository;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Profile;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * 개발환경 전용 관리자 컨트롤러
+ * 테스트 데이터 생성 및 디버깅용 API 제공
+ */
+@Tag(name = "개발 관리자 API", description = "개발환경 전용 관리자 기능")
+@RestController
+@RequestMapping("/api/dev/admin")
+@RequiredArgsConstructor
+@Slf4j
+@Profile({"local", "dev"}) // 로컬, 개발 환경에서만 활성화
+public class DevAdminController {
+
+    private final UserRepository userRepository;
+    private final PasswordEncoderUtil passwordEncoderUtil;
+
+    @Operation(summary = "테스트 사용자 생성", description = "테스트용 사용자 계정을 생성합니다.")
+    @PostMapping("/create-test-user")
+    public ResponseEntity<Map<String, Object>> createTestUser() {
+        String testEmail = "test@autocoin.com";
+        
+        try {
+            // 기존 사용자가 있는지 확인
+            if (userRepository.existsByEmail(testEmail)) {
+                log.info("테스트 사용자가 이미 존재합니다: {}", testEmail);
+                
+                User existingUser = userRepository.findByEmail(testEmail).orElse(null);
+                Map<String, Object> response = new HashMap<>();
+                response.put("status", "exists");
+                response.put("message", "테스트 사용자가 이미 존재합니다");
+                response.put("user", Map.of(
+                    "id", existingUser.getId(),
+                    "email", existingUser.getEmail(),
+                    "username", existingUser.getUsername(),
+                    "role", existingUser.getRole().name()
+                ));
+                response.put("credentials", Map.of(
+                    "email", testEmail,
+                    "password", "Test1234!"
+                ));
+                
+                return ResponseEntity.ok(response);
+            }
+
+            // 새 테스트 사용자 생성
+            User testUser = User.builder()
+                    .email(testEmail)
+                    .username("테스트 사용자")
+                    .password(passwordEncoderUtil.encode("Test1234!"))
+                    .role(Role.ADMIN) // 관리자 권한으로 생성
+                    .build();
+
+            User savedUser = userRepository.save(testUser);
+            log.info("테스트 사용자 생성 완료: ID={}, 이메일={}", savedUser.getId(), savedUser.getEmail());
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "created");
+            response.put("message", "테스트 사용자가 성공적으로 생성되었습니다");
+            response.put("user", Map.of(
+                "id", savedUser.getId(),
+                "email", savedUser.getEmail(),
+                "username", savedUser.getUsername(),
+                "role", savedUser.getRole().name()
+            ));
+            response.put("credentials", Map.of(
+                "email", testEmail,
+                "password", "Test1234!"
+            ));
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("테스트 사용자 생성 실패: {}", e.getMessage(), e);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "error");
+            response.put("message", "테스트 사용자 생성 실패: " + e.getMessage());
+            
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+
+    @Operation(summary = "모든 사용자 조회", description = "데이터베이스의 모든 사용자를 조회합니다.")
+    @GetMapping("/users")
+    public ResponseEntity<Map<String, Object>> getAllUsers() {
+        try {
+            List<User> users = userRepository.findAll();
+            log.info("총 사용자 수: {}", users.size());
+
+            List<Map<String, Object>> userList = users.stream()
+                    .map(user -> Map.of(
+                        "id", user.getId(),
+                        "email", user.getEmail(),
+                        "username", user.getUsername(),
+                        "role", user.getRole().name(),
+                        "createdAt", user.getCreatedAt()
+                    ))
+                    .toList();
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "success");
+            response.put("totalCount", users.size());
+            response.put("users", userList);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("사용자 조회 실패: {}", e.getMessage(), e);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "error");
+            response.put("message", "사용자 조회 실패: " + e.getMessage());
+            
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+
+    @Operation(summary = "특정 사용자 조회", description = "이메일로 특정 사용자를 조회합니다.")
+    @GetMapping("/users/{email}")
+    public ResponseEntity<Map<String, Object>> getUserByEmail(@PathVariable String email) {
+        try {
+            User user = userRepository.findByEmail(email).orElse(null);
+            
+            Map<String, Object> response = new HashMap<>();
+            
+            if (user != null) {
+                response.put("status", "found");
+                response.put("user", Map.of(
+                    "id", user.getId(),
+                    "email", user.getEmail(),
+                    "username", user.getUsername(),
+                    "role", user.getRole().name(),
+                    "createdAt", user.getCreatedAt()
+                ));
+            } else {
+                response.put("status", "not_found");
+                response.put("message", "해당 이메일의 사용자를 찾을 수 없습니다: " + email);
+            }
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("사용자 조회 실패: {}", e.getMessage(), e);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "error");
+            response.put("message", "사용자 조회 실패: " + e.getMessage());
+            
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+
+    @Operation(summary = "데이터베이스 상태 확인", description = "데이터베이스 연결 상태를 확인합니다.")
+    @GetMapping("/db-status")
+    public ResponseEntity<Map<String, Object>> checkDatabaseStatus() {
+        try {
+            long userCount = userRepository.count();
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "connected");
+            response.put("message", "데이터베이스 연결 정상");
+            response.put("userCount", userCount);
+            response.put("timestamp", System.currentTimeMillis());
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("데이터베이스 상태 확인 실패: {}", e.getMessage(), e);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "error");
+            response.put("message", "데이터베이스 연결 실패: " + e.getMessage());
+            
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+}

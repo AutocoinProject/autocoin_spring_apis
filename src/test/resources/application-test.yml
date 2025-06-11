@@ -1,0 +1,165 @@
+# ===========================================
+# 테스트 환경 통합 설정 파일
+# ===========================================
+
+# ===========================================
+# Spring Framework 설정
+# ===========================================
+spring:
+  # 프로필 설정
+  profiles:
+    active: test
+  
+  # H2 메모리 데이터베이스 설정
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=MySQL;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  
+  # JPA 설정
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        format_sql: false  # 테스트 로그 정리를 위해 false
+        show_sql: false   # 테스트 로그 정리를 위해 false
+        dialect: org.hibernate.dialect.H2Dialect
+    defer-datasource-initialization: false
+    database-platform: org.hibernate.dialect.H2Dialect
+    
+  # H2 콘솔 설정 (테스트용)
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+    
+  # 파일 업로드 설정
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+  # 스케줄링 비활성화
+  task:
+    scheduling:
+      enabled: false
+      
+  # 테스트 컨텍스트 캐시 설정
+  test:
+    context:
+      cache:
+        maxSize: 1
+
+  # Jackson 설정
+  jackson:
+    time-zone: UTC
+    date-format: yyyy-MM-dd'T'HH:mm:ss.SSS'Z'
+
+# ===========================================
+# AWS 테스트 설정
+# ===========================================
+cloud:
+  aws:
+    s3:
+      bucket: test-bucket
+    credentials:
+      access-key: test-access-key
+      secret-key: test-secret-key
+    region:
+      static: ap-northeast-2
+    stack:
+      auto: false
+
+# ===========================================
+# 보안 & 인증 설정
+# ===========================================
+# JWT 테스트 설정
+jwt:
+  secret: test-jwt-secret-key-for-testing-purposes-only-not-for-production-environment-minimum-32-characters
+  expiration: 1800000  # 30분
+
+# OAuth2 비활성화 (테스트용)
+oauth2:
+  enabled: false
+
+# ===========================================
+# 외부 서비스 설정 (테스트용)
+# ===========================================
+# 뉴스 API 테스트 설정 (비활성화)
+news:
+  serpapi:
+    api-key: test-api-key
+    enabled: false
+  scheduler:
+    enabled: false
+
+# Sentry 비활성화 (테스트용)
+sentry:
+  dsn: ""
+  environment: test
+
+# ===========================================
+# 애플리케이션 설정
+# ===========================================
+# 애플리케이션 초기화 비활성화
+app:
+  init:
+    enabled: false
+
+# ===========================================
+# CORS 설정
+# ===========================================
+cors:
+  allowed-origins: http://localhost:3000
+  allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+  allowed-headers: Authorization,Content-Type
+  max-age: 3600
+
+# ===========================================
+# 로깅 설정
+# ===========================================
+logging:
+  level:
+    com.autocoin: INFO
+    org.hibernate.SQL: OFF
+    org.hibernate.type.descriptor.sql.BasicBinder: OFF
+    org.springframework.web: INFO
+    org.springframework.security: DEBUG  # 테스트 시 보안 로그 확인
+    org.springframework.test: INFO
+    org.springframework.boot.test: INFO
+    org.springframework.data.jpa: INFO
+    
+  # 로그 패턴 설정 (테스트용)
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+# ===========================================
+# 테스트 전용 설정
+# ===========================================
+# API 로깅 필터 설정
+autocoin:
+  logging:
+    api-filter:
+      enabled: false  # 테스트에서는 API 로깅 비활성화
+
+# 개발용 토큰 설정 (테스트용)
+dev:
+  jwt:
+    user:
+      id: 1
+      email: test@autocoin.com
+      role: ROLE_USER
+
+# ===========================================
+# 성능 & 모니터링 설정
+# ===========================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
