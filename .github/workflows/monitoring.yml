@@ -1,0 +1,246 @@
+name: 📊 Health Monitoring & Alerts
+
+on:
+  schedule:
+    # 매 30분마다 프로덕션 건강 상태 체크
+    - cron: '*/30 * * * *'
+    # 매일 오전 9시 일일 리포트
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+    inputs:
+      check_type:
+        description: 'Type of health check to perform'
+        required: true
+        type: choice
+        options:
+          - basic
+          - detailed
+          - performance
+        default: 'basic'
+      environment:
+        description: 'Environment to check'
+        required: true
+        type: choice
+        options:
+          - production
+          - staging
+          - all
+        default: 'production'
+
+env:
+  PRODUCTION_API_URL: https://api.autocoin.com
+  STAGING_API_URL: https://api-staging.autocoin.com
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  # 기본 헬스체크
+  basic-health-check:
+    name: 🏥 Basic Health Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event.schedule == '*/30 * * * *' || inputs.check_type == 'basic' || inputs.check_type == 'all'
+    
+    outputs:
+      production-status: ${{ steps.prod-check.outputs.status }}
+      staging-status: ${{ steps.staging-check.outputs.status }}
+    
+    steps:
+      - name: Health Check - Production
+        id: prod-check
+        if: inputs.environment == 'production' || inputs.environment == 'all' || github.event.schedule
+        run: |
+          API_URL="${{ env.PRODUCTION_API_URL }}"
+          echo "🔍 Checking production health: $API_URL"
+          
+          # Health endpoint check
+          if curl -s --max-time 30 "$API_URL/actuator/health" > health.json; then
+            STATUS=$(cat health.json | jq -r '.status' 2>/dev/null || echo "UNKNOWN")
+            if [ "$STATUS" = "UP" ]; then
+              echo "✅ Production health: $STATUS"
+              echo "status=UP" >> $GITHUB_OUTPUT
+            else
+              echo "❌ Production health: $STATUS"
+              echo "status=DOWN" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "❌ Production health check failed - endpoint unreachable"
+            echo "status=DOWN" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Health Check - Staging
+        id: staging-check
+        if: inputs.environment == 'staging' || inputs.environment == 'all'
+        run: |
+          API_URL="${{ env.STAGING_API_URL }}"
+          echo "🔍 Checking staging health: $API_URL"
+          
+          if curl -s --max-time 30 "$API_URL/actuator/health" > staging_health.json; then
+            STATUS=$(cat staging_health.json | jq -r '.status' 2>/dev/null || echo "UNKNOWN")
+            if [ "$STATUS" = "UP" ]; then
+              echo "✅ Staging health: $STATUS"
+              echo "status=UP" >> $GITHUB_OUTPUT
+            else
+              echo "❌ Staging health: $STATUS"
+              echo "status=DOWN" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "❌ Staging health check failed - endpoint unreachable"
+            echo "status=DOWN" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Basic connectivity test
+        run: |
+          echo "🔗 Testing basic connectivity..."
+          
+          # Production connectivity
+          if curl -s --max-time 10 "${{ env.PRODUCTION_API_URL }}" > /dev/null; then
+            echo "✅ Production connectivity: OK"
+          else
+            echo "❌ Production connectivity: FAILED"
+          fi
+
+  # 상세 시스템 체크
+  detailed-system-check:
+    name: 🔬 Detailed System Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: inputs.check_type == 'detailed' || inputs.check_type == 'all'
+    needs: [basic-health-check]
+    
+    steps:
+      - name: Comprehensive Health Analysis
+        run: |
+          API_URL="${{ env.PRODUCTION_API_URL }}"
+          echo "🔍 Performing detailed system analysis..."
+          
+          # Health details
+          echo "📊 Health Details:"
+          if curl -s --max-time 30 "$API_URL/actuator/health" > health_detail.json; then
+            cat health_detail.json | jq '.' || echo "Failed to parse health response"
+          else
+            echo "Health endpoint unavailable"
+          fi
+          
+          # System info
+          echo "📱 Application Information:"
+          if curl -s --max-time 30 "$API_URL/actuator/info" > info.json; then
+            cat info.json | jq '.' || echo "Failed to parse info response"
+          else
+            echo "Info endpoint unavailable"
+          fi
+
+      - name: Database and Dependencies Check
+        run: |
+          API_URL="${{ env.PRODUCTION_API_URL }}"
+          
+          echo "🗄️ Database Status:"
+          if curl -s --max-time 30 "$API_URL/actuator/health" > db_health.json; then
+            DB_STATUS=$(cat db_health.json | jq -r '.components.db.status' 2>/dev/null || echo "UNKNOWN")
+            echo "Database: $DB_STATUS"
+          else
+            echo "Database status unavailable"
+          fi
+          
+          echo "🔴 Redis Status:"
+          if curl -s --max-time 30 "$API_URL/actuator/health" > redis_health.json; then
+            REDIS_STATUS=$(cat redis_health.json | jq -r '.components.redis.status' 2>/dev/null || echo "UNKNOWN")
+            echo "Redis: $REDIS_STATUS"
+          else
+            echo "Redis status unavailable"
+          fi
+
+  # 성능 테스트
+  performance-check:
+    name: 🚀 Performance Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: inputs.check_type == 'performance' || inputs.check_type == 'all'
+    
+    steps:
+      - name: Response Time Test
+        run: |
+          API_URL="${{ env.PRODUCTION_API_URL }}"
+          echo "⏱️ Testing response times..."
+          
+          # Test health endpoint response time
+          echo "Testing: /actuator/health"
+          RESPONSE_TIME=$(curl -w "%{time_total}" -s --max-time 30 -o /dev/null "$API_URL/actuator/health" || echo "0")
+          echo "Response time: ${RESPONSE_TIME}s"
+          
+          # Alert if response time > 3 seconds
+          if (( $(echo "$RESPONSE_TIME > 3.0" | bc -l 2>/dev/null || echo "0") )); then
+            echo "⚠️ Slow response detected: ${RESPONSE_TIME}s for health endpoint"
+          fi
+
+      - name: Memory and System Check
+        run: |
+          API_URL="${{ env.PRODUCTION_API_URL }}"
+          echo "🧠 Checking system metrics..."
+          
+          # Get available metrics
+          if curl -s --max-time 30 "$API_URL/actuator/metrics" > metrics.json; then
+            echo "Available metrics:"
+            cat metrics.json | jq -r '.names[]' | head -10 || echo "Failed to parse metrics"
+          else
+            echo "Metrics endpoint unavailable"
+          fi
+
+  # 알림 및 보고
+  alert-on-failure:
+    name: 🚨 Alert on Health Issues
+    runs-on: ubuntu-latest
+    needs: [basic-health-check]
+    if: always() && (needs.basic-health-check.outputs.production-status == 'DOWN' || needs.basic-health-check.outputs.staging-status == 'DOWN')
+    
+    steps:
+      - name: Send alert notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#alerts'
+          text: |
+            🚨 *Autocoin API Health Alert*
+            
+            • **Production**: ${{ needs.basic-health-check.outputs.production-status || 'Not Checked' }}
+            • **Staging**: ${{ needs.basic-health-check.outputs.staging-status || 'Not Checked' }}
+            • **Check Time**: $(date -u)
+            
+            🔗 **Action Required**: Check application status
+            • Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  daily-report:
+    name: 📈 Daily Health Report
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 9 * * *'
+    needs: [basic-health-check, detailed-system-check]
+    
+    steps:
+      - name: Generate daily report
+        run: |
+          echo "📊 Daily Health Report - $(date)"
+          echo "================================"
+          echo "Production Status: ${{ needs.basic-health-check.outputs.production-status || 'Unknown' }}"
+          echo "Staging Status: ${{ needs.basic-health-check.outputs.staging-status || 'Unknown' }}"
+          echo "Detailed Check: ${{ needs.detailed-system-check.result || 'Skipped' }}"
+          echo "Report generated at: $(date -u)"
+
+      - name: Send daily report
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          channel: '#daily-reports'
+          text: |
+            📊 *Daily Health Report*
+            
+            • **Production**: ${{ needs.basic-health-check.outputs.production-status || 'Unknown' }}
+            • **Staging**: ${{ needs.basic-health-check.outputs.staging-status || 'Unknown' }}
+            • **Report Date**: $(date)
+            
+            ✅ All systems checked
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

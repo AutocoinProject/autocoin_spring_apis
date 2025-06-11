@@ -1,7 +1,7 @@
 package com.autocoin.global.config;
 
 import com.autocoin.global.auth.provider.JwtTokenProvider;
-import com.autocoin.global.auth.filter.JwtAuthenticationFilter;
+import com.autocoin.global.config.security.JwtAuthenticationFilter;
 
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
@@ -54,6 +54,9 @@ public class JwtAuthenticationFilterTest {
     @Mock
     private ServletOutputStream outputStream;
 
+    @Mock
+    private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
     private JwtAuthenticationFilter jwtAuthenticationFilter;
 
     /**
@@ -61,7 +64,7 @@ public class JwtAuthenticationFilterTest {
      */
     @BeforeEach
     void setUp() {
-        jwtAuthenticationFilter = new JwtAuthenticationFilter(jwtTokenProvider);
+        jwtAuthenticationFilter = new JwtAuthenticationFilter(jwtTokenProvider, objectMapper);
         SecurityContextHolder.clearContext();
     }
 

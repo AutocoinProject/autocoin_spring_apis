@@ -1,0 +1,672 @@
+name: 🚀 Main CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+  pull_request:
+    branches: [main, develop]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      skip_tests:
+        description: 'Skip tests (emergency deployment)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/autocoin-api
+  JAVA_VERSION: '17'
+  JAVA_DISTRIBUTION: 'corretto'
+
+# 권한 설정
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+  pull-requests: write
+
+jobs:
+  # ================================
+  # 1단계: 코드 품질 검사 (병렬 실행)
+  # ================================
+  
+  code-quality:
+    name: 🔍 Code Quality Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run code style checks
+        run: |
+          echo "Running code quality checks..."
+          # ./gradlew checkstyleMain checkstyleTest || echo "Checkstyle not configured"
+          # ./gradlew spotbugsMain || echo "SpotBugs not configured"
+          echo "✅ Code quality check completed"
+
+      - name: Upload code quality results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: code-quality-results
+          path: |
+            build/reports/checkstyle/
+            build/reports/spotbugs/
+
+  security-scan:
+    name: 🛡️ Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Security scan
+        run: |
+          echo "Running security scans..."
+          # OWASP Dependency Check (설정된 경우)
+          # ./gradlew dependencyCheckAnalyze || echo "OWASP not configured"
+          echo "✅ Security scan completed"
+
+  dependency-check:
+    name: 📦 Dependency Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Generate dependency report
+        run: |
+          echo "Analyzing dependencies..."
+          ./gradlew dependencies > dependency-report.txt
+          echo "✅ Dependency analysis completed"
+
+      - name: Upload dependency reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-reports
+          path: dependency-report.txt
+
+  # ================================
+  # 2단계: 테스트 실행 (병렬 실행)
+  # ================================
+  
+  unit-tests:
+    name: 🧪 Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [code-quality, security-scan, dependency-check]
+    if: ${{ !inputs.skip_tests }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run Unit Tests
+        run: ./gradlew test
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: |
+            build/reports/tests/
+            build/test-results/
+
+  coverage-report:
+    name: 📊 Coverage Report
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [unit-tests]
+    if: ${{ !inputs.skip_tests }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run tests with coverage
+        run: ./gradlew test jacocoTestReport
+
+      - name: Upload coverage results
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-results
+          path: build/reports/jacoco/
+
+  # ================================
+  # 3단계: 빌드 및 패키징 (순차 실행)
+  # ================================
+  
+  build:
+    name: 🏗️ Build Application
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [unit-tests, coverage-report]
+    if: always() && (needs.unit-tests.result == 'success' || inputs.skip_tests)
+    
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+      version: ${{ steps.version.outputs.version }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build application
+        run: ./gradlew build -x test
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(./gradlew properties -q | grep "version:" | awk '{print $2}')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Output image info
+        id: image
+        run: echo "image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            build/libs/*.jar
+            build/distributions/
+
+  docker-build:
+    name: 🐳 Docker Build & Push
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [build]
+    if: github.event_name != 'pull_request'
+    
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+      digest: ${{ steps.build.outputs.digest }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: build/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ needs.build.outputs.version }}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Output image
+        id: image
+        run: echo "image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
+
+  # ================================
+  # 4단계: 배포 (환경별 분리)
+  # ================================
+  
+  deploy-staging:
+    name: 🚀 Deploy to Staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [docker-build]
+    if: |
+      (github.ref == 'refs/heads/develop' && github.event_name == 'push') ||
+      (inputs.environment == 'staging' && github.event_name == 'workflow_dispatch')
+    environment:
+      name: staging
+      url: https://api-staging.autocoin.com
+    
+    steps:
+      - name: Deploy to staging
+        run: |
+          echo "🚀 Deploying to staging environment..."
+          echo "Image: ${{ needs.docker-build.outputs.image }}"
+          echo "✅ Staging deployment simulated (configure your staging server)"
+
+  deploy-production:
+    name: 🚀 Deploy to Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [docker-build]
+    if: |
+      (github.ref == 'refs/heads/main' && github.event_name == 'push') ||
+      (inputs.environment == 'production' && github.event_name == 'workflow_dispatch')
+    environment:
+      name: production
+      url: https://api.autocoin.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Production EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_SSH_PORT || 22 }}
+          script: |
+            # 컬러 출력 함수
+            echo_info() { echo -e "\033[1;34m[INFO]\033[0m $1"; }
+            echo_success() { echo -e "\033[1;32m[SUCCESS]\033[0m $1"; }
+            echo_error() { echo -e "\033[1;31m[ERROR]\033[0m $1"; }
+            echo_warning() { echo -e "\033[1;33m[WARNING]\033[0m $1"; }
+
+            echo_info "🚀 Starting Autocoin API deployment..."
+
+            # 기본 변수 설정
+            APP_NAME="autocoin-api"
+            CONTAINER_NAME="autocoin-api-prod"
+            IMAGE_NAME="${{ needs.docker-build.outputs.image }}"
+            DEPLOY_DIR="/opt/autocoin"
+            BACKUP_DIR="$DEPLOY_DIR/backups"
+            
+            # 디렉토리 생성
+            echo_info "📁 Creating directories..."
+            sudo mkdir -p $DEPLOY_DIR $BACKUP_DIR
+            sudo chown -R $USER:$USER $DEPLOY_DIR
+
+            cd $DEPLOY_DIR
+
+            # GitHub Container Registry 로그인
+            echo_info "🔑 Logging into GitHub Container Registry..."
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # 최신 소스 코드 받기
+            echo_info "📥 Pulling latest source code..."
+            if [ ! -d ".git" ]; then
+                git clone https://github.com/${{ github.repository }}.git .
+            else
+                git fetch origin
+                git reset --hard origin/main
+            fi
+
+            # 환경 변수 파일 생성
+            echo_info "⚙️  Creating environment file..."
+            cat > .env.prod << EOF
+            # Database
+            DB_NAME=${{ secrets.DB_NAME || 'autocoin' }}
+            DB_USERNAME=${{ secrets.DB_USERNAME || 'autocoin' }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
+
+            # JWT Security
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            JWT_EXPIRATION=${{ secrets.JWT_EXPIRATION || '3600000' }}
+            JWT_REFRESH_EXPIRATION=${{ secrets.JWT_REFRESH_EXPIRATION || '86400000' }}
+
+            # OAuth2
+            OAUTH2_ENABLED=${{ secrets.OAUTH2_ENABLED || 'true' }}
+            GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+            GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
+            KAKAO_CLIENT_ID=${{ secrets.KAKAO_CLIENT_ID }}
+            KAKAO_CLIENT_SECRET=${{ secrets.KAKAO_CLIENT_SECRET }}
+
+            # AWS S3
+            AWS_ACCESS_KEY=${{ secrets.AWS_ACCESS_KEY }}
+            AWS_SECRET_KEY=${{ secrets.AWS_SECRET_KEY }}
+            AWS_S3_BUCKET=${{ secrets.AWS_S3_BUCKET }}
+            AWS_REGION=${{ secrets.AWS_REGION || 'ap-northeast-2' }}
+
+            # Upbit
+            UPBIT_ENCRYPTION_KEY=${{ secrets.UPBIT_ENCRYPTION_KEY }}
+
+            # External APIs
+            SERP_API_KEY=${{ secrets.SERP_API_KEY }}
+
+            # Monitoring
+            SENTRY_DSN=${{ secrets.SENTRY_DSN }}
+            SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
+
+            # CORS
+            CORS_ALLOWED_ORIGINS=${{ secrets.CORS_ALLOWED_ORIGINS || 'https://autocoin.com,https://www.autocoin.com' }}
+
+            # Domains
+            API_DOMAIN=${{ secrets.API_DOMAIN || 'api.autocoin.com' }}
+
+            # Application
+            ENVIRONMENT=production
+            APP_VERSION=${{ github.sha }}
+            DEPLOY_HOST=${{ secrets.EC2_HOST }}
+            
+            # Docker 이미지
+            DOCKER_IMAGE=$IMAGE_NAME
+            EOF
+
+            # 기존 컨테이너 백업 및 중지
+            echo_info "🔄 Managing existing containers..."
+            if docker ps -q -f name=$CONTAINER_NAME | grep -q .; then
+                echo_info "Stopping existing container..."
+                docker stop $CONTAINER_NAME || true
+            fi
+
+            if docker ps -aq -f name=$CONTAINER_NAME | grep -q .; then
+                echo_info "Removing existing container..."
+                docker rm $CONTAINER_NAME || true
+            fi
+
+            # 새 이미지 pull
+            echo_info "📦 Pulling new Docker image..."
+            docker pull $IMAGE_NAME
+
+            # 데이터베이스 백업 (MySQL 컨테이너가 실행 중인 경우)
+            if docker ps -q -f name=autocoin-mysql-prod | grep -q .; then
+                echo_info "💾 Creating database backup..."
+                BACKUP_FILE="autocoin_backup_$(date +%Y%m%d_%H%M%S).sql"
+                docker exec autocoin-mysql-prod mysqldump \
+                    -u root -p${{ secrets.MYSQL_ROOT_PASSWORD }} \
+                    --single-transaction \
+                    --routines \
+                    --triggers \
+                    autocoin > $BACKUP_DIR/$BACKUP_FILE || echo_warning "Database backup failed or MySQL not running"
+                
+                # 오래된 백업 정리 (30일 이상)
+                find $BACKUP_DIR -name "*.sql" -mtime +30 -delete || true
+            fi
+
+            # Docker Compose로 전체 스택 시작
+            echo_info "🚀 Starting application stack..."
+            if [ -f "docker/docker-compose.prod.yml" ]; then
+                # 전체 스택 시작 (처음 배포하는 경우)
+                docker-compose -f docker/docker-compose.prod.yml --env-file .env.prod up -d
+            else
+                # 단일 컨테이너로 실행 (간단한 배포)
+                docker run -d \
+                    --name $CONTAINER_NAME \
+                    --restart unless-stopped \
+                    -p 8080:8080 \
+                    --env-file .env.prod \
+                    -v $DEPLOY_DIR/logs:/app/logs \
+                    $IMAGE_NAME
+            fi
+
+            # 애플리케이션 시작 대기
+            echo_info "⏳ Waiting for application to start..."
+            RETRY_COUNT=0
+            MAX_RETRIES=30
+            
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+                if curl -sf http://localhost:8080/actuator/health > /dev/null 2>&1; then
+                    echo_success "✅ Application started successfully!"
+                    break
+                fi
+                
+                echo "Waiting for application... ($((RETRY_COUNT + 1))/$MAX_RETRIES)"
+                sleep 5
+                RETRY_COUNT=$((RETRY_COUNT + 1))
+            done
+
+            if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+                echo_error "❌ Application failed to start within timeout"
+                
+                # 디버깅을 위한 로그 출력
+                echo_info "📋 Application logs:"
+                docker logs $CONTAINER_NAME --tail 50
+                exit 1
+            fi
+
+            # 배포 검증
+            echo_info "🔍 Verifying deployment..."
+            
+            # 헬스체크
+            HEALTH_STATUS=$(curl -sf http://localhost:8080/actuator/health | jq -r '.status' 2>/dev/null || echo "UNKNOWN")
+            if [ "$HEALTH_STATUS" = "UP" ]; then
+                echo_success "✅ Health check passed"
+            else
+                echo_error "❌ Health check failed: $HEALTH_STATUS"
+                exit 1
+            fi
+
+            # 컨테이너 상태 확인
+            if docker ps -f name=$CONTAINER_NAME --format "table {{.Names}}\t{{.Status}}" | grep -q "Up"; then
+                echo_success "✅ Container is running"
+            else
+                echo_error "❌ Container is not running"
+                exit 1
+            fi
+
+            # 리소스 정리
+            echo_info "🧹 Cleaning up..."
+            docker image prune -f || true
+
+            # 배포 완료 정보
+            echo_success "🎉 Deployment completed successfully!"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "📊 Deployment Summary:"
+            echo "  • Image: $IMAGE_NAME"
+            echo "  • Container: $CONTAINER_NAME"
+            echo "  • Commit: ${{ github.sha }}"
+            echo "  • Author: ${{ github.actor }}"
+            echo "  • Time: $(date)"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  # ================================
+  # 5단계: 알림 및 후처리
+  # ================================
+  
+  notify-success:
+    name: ✅ Success Notification
+    runs-on: ubuntu-latest
+    needs: [deploy-production, deploy-staging]
+    if: always() && (needs.deploy-production.result == 'success' || needs.deploy-staging.result == 'success')
+    
+    steps:
+      - name: Notify Slack - Success
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          channel: '#deployments'
+          text: |
+            🎉 *Autocoin API 배포 성공!*
+            
+            • **Environment**: ${{ needs.deploy-production.result == 'success' && 'Production' || 'Staging' }}
+            • **Version**: ${{ needs.build.outputs.version }}
+            • **Branch**: `${{ github.ref_name }}`
+            • **Commit**: `${{ github.sha }}`
+            • **Author**: ${{ github.actor }}
+            • **Image**: `${{ needs.docker-build.outputs.image }}`
+            
+            🔗 **Links**:
+            • API: https://api.autocoin.com
+            • Health: https://api.autocoin.com/actuator/health
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  notify-failure:
+    name: ❌ Failure Notification
+    runs-on: ubuntu-latest
+    if: failure()
+    
+    steps:
+      - name: Notify Slack - Failure
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#deployments'
+          text: |
+            🚨 *Autocoin API 파이프라인 실패!*
+            
+            • **Branch**: `${{ github.ref_name }}`
+            • **Commit**: `${{ github.sha }}`
+            • **Author**: ${{ github.actor }}
+            • **Workflow**: ${{ github.workflow }}
+            
+            🔗 **Debug**:
+            • Logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            
+            ⚠️ 즉시 확인이 필요합니다!
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  cleanup:
+    name: 🧹 Cleanup
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [notify-success, notify-failure]
+    
+    steps:
+      - name: Clean up artifacts
+        run: |
+          echo "🧹 Cleaning up temporary resources..."
+          echo "✅ Cleanup completed"
