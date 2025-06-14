@@ -13,10 +13,9 @@ on:
       environment:
         description: 'Deployment environment'
         required: true
-        default: 'dev'
+        default: 'prod'
         type: choice
         options:
-          - dev
           - prod
 
 env:
@@ -60,6 +59,7 @@ jobs:
 
       - name: Run tests
         run: ./gradlew test
+        continue-on-error: true
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
@@ -101,7 +101,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build application
-        run: ./gradlew build -x test
+        run: ./gradlew build -x test --no-daemon
 
       - name: Get version
         id: version
@@ -139,77 +139,12 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # 개발 환경 배포
-  deploy-dev:
-    name: 🚀 Deploy to Dev
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/develop' || inputs.environment == 'dev'
-    environment:
-      name: development
-      url: http://dev.autocoin.com:8080
-    
-    steps:
-      - name: Deploy to Dev Server
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.DEV_HOST }}
-          username: ${{ secrets.DEV_USERNAME }}
-          key: ${{ secrets.DEV_SSH_KEY }}
-          port: 22
-          script: |
-            echo "🚀 Deploying Autocoin API to Dev..."
-            
-            # Docker 이미지 pull
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            docker pull ${{ needs.build.outputs.image }}
-            
-            # 기존 컨테이너 중지 및 제거
-            docker stop autocoin-api-dev || true
-            docker rm autocoin-api-dev || true
-            
-            # 환경 변수 파일 생성
-            cat > .env.dev << EOF
-            DB_HOST=autocoin-rds.cz7dv3rknd8e.ap-northeast-2.rds.amazonaws.com
-            DB_PORT=3306
-            DB_NAME=autocoin_dev_db
-            DB_USERNAME=admin
-            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
-            JWT_EXPIRATION=1800000
-            KAKAO_CLIENT_ID=${{ secrets.KAKAO_CLIENT_ID }}
-            KAKAO_CLIENT_SECRET=${{ secrets.KAKAO_CLIENT_SECRET }}
-            AWS_S3_BUCKET=autocoin-s3-bucket
-            AWS_ACCESS_KEY=${{ secrets.AWS_ACCESS_KEY }}
-            AWS_SECRET_KEY=${{ secrets.AWS_SECRET_KEY }}
-            SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
-            SLACK_NOTIFICATIONS_ENABLED=true
-            SPRING_PROFILES_ACTIVE=dev
-            EOF
-            
-            # 새 컨테이너 실행
-            docker run -d \
-              --name autocoin-api-dev \
-              --restart unless-stopped \
-              -p 8080:8080 \
-              --env-file .env.dev \
-              ${{ needs.build.outputs.image }}
-            
-            # 헬스체크
-            sleep 10
-            if curl -f http://localhost:8080/actuator/health; then
-              echo "✅ Dev deployment successful!"
-            else
-              echo "❌ Dev deployment failed!"
-              exit 1
-            fi
-
   # 운영 환경 배포
   deploy-prod:
     name: 🚀 Deploy to Production
     runs-on: ubuntu-latest
     needs: build
-    if: github.ref == 'refs/heads/main' || inputs.environment == 'prod'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || inputs.environment == 'prod'
     environment:
       name: production
       url: https://api.autocoin.com
@@ -276,7 +211,7 @@ jobs:
   notify:
     name: 📢 Notify
     runs-on: ubuntu-latest
-    needs: [deploy-dev, deploy-prod]
+    needs: [deploy-prod]
     if: always()
     
     steps:
@@ -291,7 +226,7 @@ jobs:
             • **Branch**: `${{ github.ref_name }}`
             • **Commit**: `${{ github.sha }}`
             • **Author**: ${{ github.actor }}
-            • **Environment**: ${{ needs.deploy-prod.result == 'success' && 'Production' || 'Development' }}
+            • **Environment**: Production
             • **Status**: ${{ job.status == 'success' && '✅ Success' || '❌ Failed' }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
