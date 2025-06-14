@@ -1,0 +1,205 @@
+name: Build and Deploy to EC2
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+    
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+    
+    - name: Create .env file for testing
+      run: |
+        cat > .env << EOF
+        # Test environment settings
+        SPRING_PROFILES_ACTIVE=test
+        API_PORT=8080
+        
+        # Test database (H2)
+        DB_URL=jdbc:h2:mem:testdb
+        DB_USERNAME=sa
+        DB_PASSWORD=
+        DDL_AUTO=create-drop
+        
+        # Use PROD secrets for validation
+        JWT_SECRET=${{ secrets.JWT_SECRET_PROD }}
+        GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID_PROD }}
+        GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET_PROD }}
+        KAKAO_CLIENT_ID=${{ secrets.KAKAO_CLIENT_ID_PROD }}
+        KAKAO_CLIENT_SECRET=${{ secrets.KAKAO_CLIENT_SECRET_PROD }}
+        AWS_ACCESS_KEY=${{ secrets.AWS_ACCESS_KEY_PROD }}
+        AWS_SECRET_KEY=${{ secrets.AWS_SECRET_KEY_PROD }}
+        UPBIT_ENCRYPTION_KEY=${{ secrets.UPBIT_ENCRYPTION_KEY_PROD }}
+        SERP_API_KEY=${{ secrets.SERP_API_KEY_PROD }}
+        SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL_PROD }}
+        SENTRY_DSN=${{ secrets.SENTRY_DSN_PROD }}
+        
+        # Disable features for testing
+        OAUTH2_ENABLED=false
+        SWAGGER_ENABLED=false
+        APP_INIT_ENABLED=false
+        SLACK_NOTIFICATIONS_ENABLED=false
+        EOF
+    
+    - name: Run tests
+      run: ./gradlew test
+    
+    - name: Build with Gradle
+      run: ./gradlew build
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_PROD }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY_PROD }}
+        aws-region: ap-northeast-2
+    
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.8.0
+      with:
+        ssh-private-key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+    
+    - name: Deploy to EC2
+      run: |
+        # Add EC2 to known hosts
+        ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+        
+        # Deploy commands
+        ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          # Update system
+          sudo apt update
+          
+          # Install Docker if not exists
+          if ! command -v docker &> /dev/null; then
+            echo "Installing Docker..."
+            sudo apt install -y docker.io docker-compose
+            sudo usermod -aG docker $USER
+            sudo systemctl start docker
+            sudo systemctl enable docker
+            echo "Docker installed successfully!"
+          fi
+          
+          # Install git if not exists
+          if ! command -v git &> /dev/null; then
+            sudo apt install -y git
+          fi
+          
+          # Clone or update project
+          if [ ! -d "/home/ubuntu/autocoin_spring_apis" ]; then
+            echo "Cloning project..."
+            cd /home/ubuntu
+            git clone ${{ github.server_url }}/${{ github.repository }}.git autocoin_spring_apis
+          else
+            echo "Updating project..."
+            cd /home/ubuntu/autocoin_spring_apis
+            git pull origin main
+          fi
+          
+          # Navigate to project directory
+          cd /home/ubuntu/autocoin_spring_apis
+          
+          # Make gradlew executable
+          chmod +x gradlew
+          
+          # Create production .env file with secrets
+          cat > .env << ENVEOF
+          # Production Environment Variables
+          SPRING_PROFILES_ACTIVE=prod
+          API_PORT=8080
+          SERVER_ADDRESS=0.0.0.0
+          APP_INIT_ENABLED=true
+          
+          # Database
+          DB_URL=${{ secrets.DB_URL_PROD }}
+          DB_USERNAME=${{ secrets.DB_USERNAME_PROD }}
+          DB_PASSWORD=${{ secrets.DB_PASSWORD_PROD }}
+          MYSQL_ROOT_PASSWORD=${{ secrets.DB_PASSWORD_PROD }}
+          DDL_AUTO=validate
+          
+          # Security
+          JWT_SECRET=${{ secrets.JWT_SECRET_PROD }}
+          JWT_EXPIRATION=1800000
+          JWT_REFRESH_EXPIRATION=604800000
+          
+          # OAuth2
+          OAUTH2_ENABLED=true
+          GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID_PROD }}
+          GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET_PROD }}
+          KAKAO_CLIENT_ID=${{ secrets.KAKAO_CLIENT_ID_PROD }}
+          KAKAO_CLIENT_SECRET=${{ secrets.KAKAO_CLIENT_SECRET_PROD }}
+          
+          # AWS
+          AWS_S3_BUCKET=autocoin-s3-bucket
+          AWS_ACCESS_KEY=${{ secrets.AWS_ACCESS_KEY_PROD }}
+          AWS_SECRET_KEY=${{ secrets.AWS_SECRET_KEY_PROD }}
+          AWS_REGION=ap-northeast-2
+          
+          # External APIs
+          UPBIT_ENCRYPTION_KEY=${{ secrets.UPBIT_ENCRYPTION_KEY_PROD }}
+          SERP_API_KEY=${{ secrets.SERP_API_KEY_PROD }}
+          
+          # Monitoring
+          SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL_PROD }}
+          SLACK_NOTIFICATIONS_ENABLED=true
+          SENTRY_DSN=${{ secrets.SENTRY_DSN_PROD }}
+          SENTRY_ENVIRONMENT=production
+          
+          # CORS
+          CORS_ALLOWED_ORIGINS=https://autocoin.com,https://admin.autocoin.com
+          
+          # Production settings
+          SWAGGER_ENABLED=false
+          LOG_LEVEL_ROOT=INFO
+          ENVEOF
+          
+          # Stop existing containers
+          sudo docker-compose -f docker/docker-compose.ec2.yml down || true
+          
+          # Remove old images to free space
+          sudo docker system prune -f
+          
+          # Build and start services
+          sudo docker-compose -f docker/docker-compose.ec2.yml up -d --build
+          
+          # Show deployment status
+          echo "🚀 Deployment completed!"
+          sudo docker-compose -f docker/docker-compose.ec2.yml ps
+        EOF
+        
+    - name: Verify deployment
+      run: |
+        # Wait for service to be ready
+        sleep 60
+        
+        # Health check
+        ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          # Check if service is healthy
+          if curl -f http://localhost:8080/actuator/health; then
+            echo "✅ Service is healthy"
+          else
+            echo "❌ Service health check failed"
+            exit 1
+          fi
+        EOF
