@@ -172,6 +172,11 @@ tasks.named('test') {
     
     systemProperty 'spring.profiles.active', 'test'
     systemProperty 'spring.test.context.cache.maxSize', '1'
+    systemProperty 'sentry.dsn', ''
+    systemProperty 'sentry.enabled', 'false'
+    systemProperty 'logging.level.org.springframework.test.context', 'DEBUG'
+    systemProperty 'logging.level.org.springframework.boot.test.context', 'DEBUG'
+    systemProperty 'logging.level.org.springframework.context', 'DEBUG'
     
     testLogging {
         events "passed", "skipped", "failed"

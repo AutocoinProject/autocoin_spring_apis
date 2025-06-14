@@ -10,12 +10,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.UUID;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class S3Uploader {
+public class S3Uploader implements S3UploaderInterface {
 
     private final AmazonS3 amazonS3;
 
@@ -29,7 +30,7 @@ public class S3Uploader {
      * @return 업로드된 파일의 S3 URL
      * @throws IOException 파일 업로드 실패 시 발생
      */
-    public String upload(MultipartFile multipartFile, String dirName) {
+    public String upload(MultipartFile multipartFile, String dirName) throws IOException {
         log.info("=== S3Uploader.upload 시작 ===");
         
         if (multipartFile == null) {
@@ -150,6 +151,7 @@ public class S3Uploader {
      * S3 연결 상태 체크 (공개 메서드)
      * @return S3 연결 가능 여부
      */
+    @Override
     public boolean checkS3Connection() {
         return isS3Available();
     }

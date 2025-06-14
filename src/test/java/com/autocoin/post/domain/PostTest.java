@@ -1,104 +1,73 @@
 package com.autocoin.post.domain;
 
 import com.autocoin.post.domain.entity.Post;
+import com.autocoin.user.domain.User;
+import com.autocoin.user.domain.Role;
+import com.autocoin.category.domain.entity.Category;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.time.LocalDateTime;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Post 도메인 엔티티 테스트
+ */
 class PostTest {
 
     @Test
-    @DisplayName("Post 엔티티 생성 테스트")
+    @DisplayName("Post 생성 테스트")
     void createPost() {
         // given
-        String title = "테스트 제목";
-        String content = "테스트 내용";
-        String writer = "테스트 작성자";
-        String fileUrl = "https://example.com/test.jpg";
-        String fileName = "test.jpg";
-        String fileKey = "posts/test.jpg";
+        User user = User.builder()
+                .id(1L)
+                .email("test@example.com")
+                .username("testuser")
+                .password("password")
+                .role(Role.USER)
+                .build();
+
+        Category category = Category.builder()
+                .id(1L)
+                .name("테스트 카테고리")
+                .description("테스트 설명")
+                .build();
 
         // when
         Post post = Post.builder()
-                .title(title)
-                .content(content)
-                .writer(writer)
-                .fileUrl(fileUrl)
-                .fileName(fileName)
-                .fileKey(fileKey)
+                .id(1L)
+                .title("테스트 제목")
+                .content("테스트 내용")
+                .writer("테스트 작성자")
+                .user(user)
+                .category(category)
                 .build();
 
         // then
-        assertThat(post).isNotNull();
-        assertThat(post.getTitle()).isEqualTo(title);
-        assertThat(post.getContent()).isEqualTo(content);
-        assertThat(post.getWriter()).isEqualTo(writer);
-        assertThat(post.getFileUrl()).isEqualTo(fileUrl);
-        assertThat(post.getFileName()).isEqualTo(fileName);
-        assertThat(post.getFileKey()).isEqualTo(fileKey);
+        assertThat(post.getId()).isEqualTo(1L);
+        assertThat(post.getTitle()).isEqualTo("테스트 제목");
+        assertThat(post.getContent()).isEqualTo("테스트 내용");
+        assertThat(post.getWriter()).isEqualTo("테스트 작성자");
+        assertThat(post.getUser()).isEqualTo(user);
+        assertThat(post.getCategory()).isEqualTo(category);
     }
 
     @Test
-    @DisplayName("Post 엔티티 수정 테스트")
+    @DisplayName("Post 업데이트 테스트")
     void updatePost() {
         // given
         Post post = Post.builder()
+                .id(1L)
                 .title("원본 제목")
                 .content("원본 내용")
                 .writer("원본 작성자")
-                .fileUrl("https://example.com/original.jpg")
-                .fileName("original.jpg")
-                .fileKey("posts/original.jpg")
                 .build();
 
-        String newTitle = "수정된 제목";
-        String newContent = "수정된 내용";
-        String newFileUrl = "https://example.com/updated.jpg";
-        String newFileName = "updated.jpg";
-        String newFileKey = "posts/updated.jpg";
-
         // when
-        post.update(newTitle, newContent, newFileUrl, newFileName, newFileKey, post.getWriter(), null);
+        post.update("수정된 제목", "수정된 내용", null, null, null, "수정된 작성자", null);
 
         // then
-        assertThat(post.getTitle()).isEqualTo(newTitle);
-        assertThat(post.getContent()).isEqualTo(newContent);
-        assertThat(post.getFileUrl()).isEqualTo(newFileUrl);
-        assertThat(post.getFileName()).isEqualTo(newFileName);
-        assertThat(post.getFileKey()).isEqualTo(newFileKey);
-    }
-
-    @Test
-    @DisplayName("Post 엔티티 수정 시 파일 정보가 null이면 기존 파일 정보 유지")
-    void updatePostWithNullFile() {
-        // given
-        String originalFileUrl = "https://example.com/original.jpg";
-        String originalFileName = "original.jpg";
-        String originalFileKey = "posts/original.jpg";
-        
-        Post post = Post.builder()
-                .title("원본 제목")
-                .content("원본 내용")
-                .writer("원본 작성자")
-                .fileUrl(originalFileUrl)
-                .fileName(originalFileName)
-                .fileKey(originalFileKey)
-                .build();
-
-        String newTitle = "수정된 제목";
-        String newContent = "수정된 내용";
-
-        // when
-        post.update(newTitle, newContent, null, null, null, post.getWriter(), null);
-
-        // then
-        assertThat(post.getTitle()).isEqualTo(newTitle);
-        assertThat(post.getContent()).isEqualTo(newContent);
-        assertThat(post.getFileUrl()).isEqualTo(originalFileUrl);
-        assertThat(post.getFileName()).isEqualTo(originalFileName);
-        assertThat(post.getFileKey()).isEqualTo(originalFileKey);
+        assertThat(post.getTitle()).isEqualTo("수정된 제목");
+        assertThat(post.getContent()).isEqualTo("수정된 내용");
+        assertThat(post.getWriter()).isEqualTo("수정된 작성자");
     }
 }

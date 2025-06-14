@@ -23,4 +23,12 @@ public interface S3UploaderInterface {
      * @param fileKey 삭제할 파일의 S3 키
      */
     void delete(String fileKey);
+    
+    /**
+     * S3 연결 상태 확인
+     * @return S3 연결 가능 여부
+     */
+    default boolean checkS3Connection() {
+        return true; // 기본값
+    }
 }

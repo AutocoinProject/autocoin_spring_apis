@@ -2,10 +2,8 @@ package com.autocoin.config;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.autocoin.file.application.service.S3UploaderInterface;
-import com.autocoin.global.auth.provider.JwtTokenProvider;
-import com.autocoin.global.util.PasswordEncoderUtil;
-import com.autocoin.news.config.NewsApiConfig;
 import com.autocoin.notification.service.SlackNotificationService;
+import com.autocoin.upbit.infrastructure.UpbitApiClient;
 import org.mockito.Mockito;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -14,18 +12,18 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 /**
- * 통합 테스트용 Configuration 클래스
- * 모든 테스트에서 필요한 Mock Bean들을 중앙 집중식으로 관리
+ * 테스트를 위한 포괄적인 Bean 설정
  */
 @TestConfiguration
-@Profile({"test", "webmvc"})
+@Profile("test")
 public class TestConfig {
 
-    /**
-     * 테스트용 PasswordEncoder Bean
-     * 실제 BCrypt를 사용하여 테스트 환경에서도 정상적인 암호화 수행
-     */
     @Bean
     @Primary
     public PasswordEncoder passwordEncoder() {
@@ -33,52 +31,86 @@ public class TestConfig {
     }
 
     /**
-     * 테스트용 Mock AmazonS3 Bean
-     * AWS S3 연결 없이 테스트 가능
+     * 테스트용 AmazonS3 Mock - 메인 설정의 amazonS3Client를 오버라이드
      */
-    @Bean
+    @Bean("amazonS3Client")
     @Primary
-    public AmazonS3 amazonS3() {
-        return Mockito.mock(AmazonS3.class);
+    @Profile("test")
+    public AmazonS3 amazonS3Client() {
+        AmazonS3 mockS3 = Mockito.mock(AmazonS3.class);
+        
+        // Mock 동작 설정
+        Mockito.when(mockS3.doesBucketExistV2(Mockito.anyString())).thenReturn(true);
+        Mockito.when(mockS3.getBucketLocation(Mockito.anyString())).thenReturn("us-east-1");
+        
+        return mockS3;
     }
 
-    /**
-     * 테스트용 Mock S3Uploader Bean
-     * 파일 업로드 기능을 Mock으로 대체
-     */
     @Bean
     @Primary
-    public S3UploaderInterface s3Uploader() {
-        return Mockito.mock(S3UploaderInterface.class);
+    public S3UploaderInterface s3UploaderInterface() {
+        S3UploaderInterface mock = Mockito.mock(S3UploaderInterface.class);
+        
+        // 기본 동작 설정
+        try {
+            Mockito.when(mock.upload(Mockito.any(), Mockito.anyString()))
+                   .thenReturn("https://test-bucket.s3.amazonaws.com/test-file.jpg");
+            Mockito.when(mock.checkS3Connection()).thenReturn(true);
+            Mockito.doNothing().when(mock).delete(Mockito.anyString());
+        } catch (Exception e) {
+            // Mock 설정 중 예외 처리
+        }
+        
+        return mock;
     }
 
-    /**
-     * 테스트용 Mock SlackNotificationService Bean
-     * Slack 알림 서비스를 Mock으로 대체
-     */
     @Bean
     @Primary
     public SlackNotificationService slackNotificationService() {
-        return Mockito.mock(SlackNotificationService.class);
+        SlackNotificationService mock = Mockito.mock(SlackNotificationService.class);
+        
+        // Mock 동작 설정 - 실제 메서드 시그니처에 맞춤
+        try {
+            Mockito.doNothing().when(mock).sendMessage(Mockito.anyString());
+            Mockito.doNothing().when(mock).sendMessage(Mockito.anyString(), Mockito.anyString());
+            Mockito.doNothing().when(mock).sendErrorMessage(Mockito.anyString(), Mockito.any(Throwable.class));
+            Mockito.doNothing().when(mock).sendErrorNotification(Mockito.anyString(), Mockito.anyString(), Mockito.any(Exception.class));
+            Mockito.doNothing().when(mock).sendInfoNotification(Mockito.anyString(), Mockito.anyString());
+            Mockito.doNothing().when(mock).sendSuccessNotification(Mockito.anyString(), Mockito.anyString());
+            Mockito.doNothing().when(mock).sendWarningNotification(Mockito.anyString(), Mockito.anyString());
+            Mockito.doNothing().when(mock).sendTradeNotification(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.anyString());
+            Mockito.doNothing().when(mock).sendStartupNotification();
+            Mockito.doNothing().when(mock).sendShutdownNotification();
+            Mockito.doNothing().when(mock).sendHealthCheckNotification(Mockito.anyString(), Mockito.anyMap());
+        } catch (Exception e) {
+            // Mock 설정 중 예외 처리
+        }
+        
+        return mock;
     }
 
-    /**
-     * 테스트용 Mock NewsApiConfig Bean
-     * 뉴스 API 설정을 Mock으로 대체
-     */
     @Bean
     @Primary
-    public NewsApiConfig newsApiConfig() {
-        return Mockito.mock(NewsApiConfig.class);
-    }
-
-    /**
-     * 테스트용 실제 PasswordEncoderUtil Bean
-     * 실제 BCrypt를 사용하여 테스트 환경에서도 정상적인 암호화 수행
-     */
-    @Bean
-    @Primary
-    public PasswordEncoderUtil passwordEncoderUtil() {
-        return new PasswordEncoderUtil(passwordEncoder());
+    public UpbitApiClient upbitApiClient() {
+        UpbitApiClient mock = Mockito.mock(UpbitApiClient.class);
+        
+        // Mock 동작 설정 - 실제 메서드 시그니처에 맞춤
+        try {
+            // 빈 리스트나 맵 반환
+            List<Map<String, Object>> emptyList = new ArrayList<>();
+            Map<String, Object> emptyMap = new HashMap<>();
+            
+            Mockito.when(mock.getMarkets()).thenReturn(emptyList);
+            Mockito.when(mock.getAccounts(Mockito.anyString(), Mockito.anyString())).thenReturn(new ArrayList<>());
+            Mockito.when(mock.getTickers(Mockito.anyList())).thenReturn(new ArrayList<>());
+            Mockito.when(mock.getOrderbook(Mockito.anyList())).thenReturn(emptyList);
+            Mockito.when(mock.getDayCandles(Mockito.anyString(), Mockito.anyString(), Mockito.anyInt())).thenReturn(emptyList);
+            Mockito.when(mock.getMinuteCandles(Mockito.anyInt(), Mockito.anyString(), Mockito.anyString(), Mockito.anyInt())).thenReturn(emptyList);
+            Mockito.when(mock.getTrades(Mockito.anyString(), Mockito.anyString(), Mockito.anyInt(), Mockito.anyString())).thenReturn(emptyList);
+        } catch (Exception e) {
+            // Mock 설정 중 예외 처리
+        }
+        
+        return mock;
     }
 }

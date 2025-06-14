@@ -2,7 +2,7 @@ package com.autocoin.post.application.service;
 
 import com.autocoin.category.application.service.CategoryService;
 import com.autocoin.category.domain.entity.Category;
-import com.autocoin.file.application.service.S3Uploader;
+import com.autocoin.file.application.service.S3UploaderInterface;
 import com.autocoin.global.exception.business.ResourceNotFoundException;
 import com.autocoin.post.domain.entity.Post;
 import com.autocoin.post.dto.request.PostRequestDto;
@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
 public class PostService {
 
     private final PostRepository postRepository;
-    private final S3Uploader s3Uploader;
+    private final S3UploaderInterface s3Uploader;
     private final CategoryService categoryService;
     private static final String S3_DIRECTORY = "posts";
 

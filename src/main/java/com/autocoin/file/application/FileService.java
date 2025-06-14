@@ -4,7 +4,7 @@ import com.autocoin.file.domain.File;
 import com.autocoin.file.domain.FileRepository;
 import com.autocoin.global.exception.core.CustomException;
 import com.autocoin.global.exception.core.ErrorCode;
-import com.autocoin.file.application.service.S3Uploader;
+import com.autocoin.file.application.service.S3UploaderInterface;
 import com.autocoin.user.domain.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +20,7 @@ import java.util.List;
 public class FileService {
 
     private final FileRepository fileRepository;
-    private final S3Uploader s3Uploader;
+    private final S3UploaderInterface s3Uploader;
     
     private static final String S3_DIRECTORY = "files";
 
