@@ -17,6 +17,7 @@ on:
         type: choice
         options:
           - prod
+          - dev
 
 env:
   REGISTRY: ghcr.io

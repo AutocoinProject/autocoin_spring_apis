@@ -1,21 +1,29 @@
-name: Deploy to EC2
+name: 🚀 Production Deploy (Legacy)
 
-# Production deployment workflow
+# 간단한 프로덕션 배포 - main 브랜치 전용
+# 새로운 multi-job workflow는 main-ci-cd.yml을 사용하세요
+
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:  # Manual trigger also available
+  workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: 'Force deployment without tests'
+        required: false
+        default: false
+        type: boolean
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/autocoin-api
 
 jobs:
-  # 테스트 및 빌드
-  build:
+  quick-deploy:
+    name: 🚀 Quick Production Deploy
     runs-on: ubuntu-latest
-    outputs:
-      image: ${{ steps.image.outputs.image }}
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://api.autocoin.com
     
     steps:
       - name: Checkout code
@@ -34,21 +42,19 @@ jobs:
             ~/.gradle/caches
             ~/.gradle/wrapper
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
       - name: Run tests
+        if: ${{ !inputs.force_deploy }}
         run: ./gradlew test
 
       - name: Build application
-        run: ./gradlew build -x test
+        run: ./gradlew build ${{ inputs.force_deploy && '-x test' || '' }}
 
       # Docker 이미지 빌드 및 푸시
       - name: Log in to Container Registry
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -62,12 +68,10 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
-            type=ref,event=pr
             type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
 
       - name: Build and push Docker image
-        if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -76,17 +80,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-      - name: Output image
-        id: image
-        run: echo "image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
-
-  # EC2에 배포 (main 브랜치만)
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
-    steps:
+      # EC2에 배포
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -95,244 +89,53 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.EC2_SSH_PORT || 22 }}
           script: |
-            # 컬러 출력 함수
-            echo_info() { echo -e "\033[1;34m[INFO]\033[0m $1"; }
-            echo_success() { echo -e "\033[1;32m[SUCCESS]\033[0m $1"; }
-            echo_error() { echo -e "\033[1;31m[ERROR]\033[0m $1"; }
-            echo_warning() { echo -e "\033[1;33m[WARNING]\033[0m $1"; }
-
-            echo_info "🚀 Starting Autocoin API deployment..."
-
-            # 기본 변수 설정
-            APP_NAME="autocoin-api"
+            echo "🚀 Quick deployment starting..."
+            
+            IMAGE_NAME="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
             CONTAINER_NAME="autocoin-api-prod"
-            IMAGE_NAME="${{ needs.build.outputs.image }}"
-            DEPLOY_DIR="/opt/autocoin"
-            BACKUP_DIR="$DEPLOY_DIR/backups"
             
-            # 디렉토리 생성
-            echo_info "📁 Creating directories..."
-            sudo mkdir -p $DEPLOY_DIR $BACKUP_DIR
-            sudo chown -R $USER:$USER $DEPLOY_DIR
-
-            cd $DEPLOY_DIR
-
-            # GitHub Container Registry 로그인
-            echo_info "🔑 Logging into GitHub Container Registry..."
+            # Login to registry
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-            # 최신 소스 코드 받기
-            echo_info "📥 Pulling latest source code..."
-            if [ ! -d ".git" ]; then
-                git clone https://github.com/${{ github.repository }}.git .
-            else
-                git fetch origin
-                git reset --hard origin/main
-            fi
-
-            # 환경 변수 파일 생성
-            echo_info "⚙️  Creating environment file..."
-            cat > .env.prod << EOF
-            # Database
-            DB_NAME=${{ secrets.DB_NAME || 'autocoin' }}
-            DB_USERNAME=${{ secrets.DB_USERNAME || 'autocoin' }}
-            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-            MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
-
-            # JWT Security
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
-            JWT_EXPIRATION=${{ secrets.JWT_EXPIRATION || '3600000' }}
-            JWT_REFRESH_EXPIRATION=${{ secrets.JWT_REFRESH_EXPIRATION || '86400000' }}
-
-            # OAuth2
-            OAUTH2_ENABLED=${{ secrets.OAUTH2_ENABLED || 'true' }}
-            GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
-            GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
-            KAKAO_CLIENT_ID=${{ secrets.KAKAO_CLIENT_ID }}
-            KAKAO_CLIENT_SECRET=${{ secrets.KAKAO_CLIENT_SECRET }}
-
-            # AWS S3
-            AWS_ACCESS_KEY=${{ secrets.AWS_ACCESS_KEY }}
-            AWS_SECRET_KEY=${{ secrets.AWS_SECRET_KEY }}
-            AWS_S3_BUCKET=${{ secrets.AWS_S3_BUCKET }}
-            AWS_REGION=${{ secrets.AWS_REGION || 'ap-northeast-2' }}
-
-            # Upbit
-            UPBIT_ENCRYPTION_KEY=${{ secrets.UPBIT_ENCRYPTION_KEY }}
-
-            # External APIs
-            SERP_API_KEY=${{ secrets.SERP_API_KEY }}
-
-            # Monitoring
-            SENTRY_DSN=${{ secrets.SENTRY_DSN }}
-            SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
-            GRAFANA_ADMIN_PASSWORD=${{ secrets.GRAFANA_ADMIN_PASSWORD }}
-            GRAFANA_SECRET_KEY=${{ secrets.GRAFANA_SECRET_KEY }}
-
-            # CORS
-            CORS_ALLOWED_ORIGINS=${{ secrets.CORS_ALLOWED_ORIGINS || 'https://autocoin.com,https://www.autocoin.com' }}
-
-            # Domains
-            API_DOMAIN=${{ secrets.API_DOMAIN || 'api.autocoin.com' }}
-            MONITORING_DOMAIN=${{ secrets.MONITORING_DOMAIN || 'monitoring.autocoin.com' }}
-
-            # Application
-            ENVIRONMENT=production
-            APP_VERSION=${{ github.sha }}
-            DEPLOY_HOST=${{ secrets.EC2_HOST }}
             
-            # Docker 이미지
-            DOCKER_IMAGE=$IMAGE_NAME
-            EOF
-
-            # 기존 컨테이너 백업 및 중지
-            echo_info "🔄 Managing existing containers..."
-            if docker ps -q -f name=$CONTAINER_NAME | grep -q .; then
-                echo_info "Stopping existing container..."
-                docker stop $CONTAINER_NAME || true
-            fi
-
-            if docker ps -aq -f name=$CONTAINER_NAME | grep -q .; then
-                echo_info "Removing existing container..."
-                docker rm $CONTAINER_NAME || true
-            fi
-
-            # 새 이미지 pull
-            echo_info "📦 Pulling new Docker image..."
+            # Pull new image
             docker pull $IMAGE_NAME
-
-            # 데이터베이스 백업 (MySQL 컨테이너가 실행 중인 경우)
-            if docker ps -q -f name=autocoin-mysql-prod | grep -q .; then
-                echo_info "💾 Creating database backup..."
-                BACKUP_FILE="autocoin_backup_$(date +%Y%m%d_%H%M%S).sql"
-                docker exec autocoin-mysql-prod mysqldump \
-                    -u root -p${{ secrets.MYSQL_ROOT_PASSWORD }} \
-                    --single-transaction \
-                    --routines \
-                    --triggers \
-                    autocoin > $BACKUP_DIR/$BACKUP_FILE || echo_warning "Database backup failed or MySQL not running"
-                
-                # 오래된 백업 정리 (30일 이상)
-                find $BACKUP_DIR -name "*.sql" -mtime +30 -delete || true
-            fi
-
-            # Docker Compose로 전체 스택 시작
-            echo_info "🚀 Starting application stack..."
-            if [ -f "docker/docker-compose.prod.yml" ]; then
-                # 전체 스택 시작 (처음 배포하는 경우)
-                docker-compose -f docker/docker-compose.prod.yml --env-file .env.prod up -d
-            else
-                # 단일 컨테이너로 실행 (간단한 배포)
-                docker run -d \
-                    --name $CONTAINER_NAME \
-                    --restart unless-stopped \
-                    -p 8080:8080 \
-                    --env-file .env.prod \
-                    -v $DEPLOY_DIR/logs:/app/logs \
-                    $IMAGE_NAME
-            fi
-
-            # 애플리케이션 시작 대기
-            echo_info "⏳ Waiting for application to start..."
-            RETRY_COUNT=0
-            MAX_RETRIES=30
             
-            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-                if curl -sf http://localhost:8080/actuator/health > /dev/null 2>&1; then
-                    echo_success "✅ Application started successfully!"
-                    break
-                fi
-                
-                echo "Waiting for application... ($((RETRY_COUNT + 1))/$MAX_RETRIES)"
-                sleep 5
-                RETRY_COUNT=$((RETRY_COUNT + 1))
+            # Stop and remove existing container
+            docker stop $CONTAINER_NAME || true
+            docker rm $CONTAINER_NAME || true
+            
+            # Start new container
+            docker run -d \
+              --name $CONTAINER_NAME \
+              --restart unless-stopped \
+              -p 8080:8080 \
+              --env-file /opt/autocoin/.env.prod \
+              $IMAGE_NAME
+            
+            # Wait for health check
+            echo "⏳ Waiting for application..."
+            for i in {1..30}; do
+              if curl -sf http://localhost:8080/actuator/health > /dev/null; then
+                echo "✅ Deployment successful!"
+                break
+              fi
+              sleep 5
             done
-
-            if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-                echo_error "❌ Application failed to start within timeout"
-                
-                # 디버깅을 위한 로그 출력
-                echo_info "📋 Application logs:"
-                docker logs $CONTAINER_NAME --tail 50
-                exit 1
-            fi
-
-            # 배포 검증
-            echo_info "🔍 Verifying deployment..."
             
-            # 헬스체크
-            HEALTH_STATUS=$(curl -sf http://localhost:8080/actuator/health | jq -r '.status' 2>/dev/null || echo "UNKNOWN")
-            if [ "$HEALTH_STATUS" = "UP" ]; then
-                echo_success "✅ Health check passed"
-            else
-                echo_error "❌ Health check failed: $HEALTH_STATUS"
-                exit 1
-            fi
+            echo "🎉 Quick deployment completed!"
 
-            # 컨테이너 상태 확인
-            if docker ps -f name=$CONTAINER_NAME --format "table {{.Names}}\t{{.Status}}" | grep -q "Up"; then
-                echo_success "✅ Container is running"
-            else
-                echo_error "❌ Container is not running"
-                exit 1
-            fi
-
-            # 리소스 정리
-            echo_info "🧹 Cleaning up..."
-            docker image prune -f || true
-
-            # 배포 완료 정보
-            echo_success "🎉 Deployment completed successfully!"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "📊 Deployment Summary:"
-            echo "  • Image: $IMAGE_NAME"
-            echo "  • Container: $CONTAINER_NAME"
-            echo "  • Commit: ${{ github.sha }}"
-            echo "  • Author: ${{ github.actor }}"
-            echo "  • Time: $(date)"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-      # 배포 성공 알림
-      - name: Notify deployment success
-        if: success()
+      - name: Notify deployment
         uses: 8398a7/action-slack@v3
         with:
-          status: success
+          status: ${{ job.status }}
           channel: '#deployments'
           text: |
-            🚀 *Autocoin API 배포 성공!*
+            ${{ job.status == 'success' && '✅' || '❌' }} *Quick Production Deploy*
             
-            • **Environment**: Production (EC2)
+            • **Status**: ${{ job.status }}
             • **Branch**: `${{ github.ref_name }}`
             • **Commit**: `${{ github.sha }}`
             • **Author**: ${{ github.actor }}
-            • **Image**: `${{ needs.build.outputs.image }}`
-            
-            🔗 **Links**:
-            • API: https://${{ secrets.API_DOMAIN || 'your-domain.com' }}
-            • Health: https://${{ secrets.API_DOMAIN || 'your-domain.com' }}/actuator/health
-            • Monitoring: https://${{ secrets.MONITORING_DOMAIN || 'monitoring.your-domain.com' }}
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-
-      # 배포 실패 알림
-      - name: Notify deployment failure
-        if: failure()
-        uses: 8398a7/action-slack@v3
-        with:
-          status: failure
-          channel: '#deployments'
-          text: |
-            ❌ *Autocoin API 배포 실패!*
-            
-            • **Environment**: Production (EC2)
-            • **Branch**: `${{ github.ref_name }}`
-            • **Commit**: `${{ github.sha }}`
-            • **Author**: ${{ github.actor }}
-            
-            🔗 **Debug**:
-            • Logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-            
-            ⚠️ 즉시 확인이 필요합니다!
+            • **Force Deploy**: ${{ inputs.force_deploy }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
