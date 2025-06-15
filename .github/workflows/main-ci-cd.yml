@@ -145,7 +145,7 @@ jobs:
     name: 🚀 Deploy to Production
     runs-on: ubuntu-latest
     needs: build
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || inputs.environment == 'prod'
+    if: github.ref == 'refs/heads/main'  # 배포 활성화!
     environment:
       name: production
       url: https://api.autocoin.com
@@ -154,9 +154,9 @@ jobs:
       - name: Deploy to Production Server
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.PROD_HOST }}
-          username: ${{ secrets.PROD_USERNAME }}
-          key: ${{ secrets.PROD_SSH_KEY }}
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           port: 22
           script: |
             echo "🚀 Deploying Autocoin API to Production..."
@@ -174,17 +174,22 @@ jobs:
             DB_HOST=autocoin-rds.cz7dv3rknd8e.ap-northeast-2.rds.amazonaws.com
             DB_PORT=3306
             DB_NAME=autocoin_prod_db
-            DB_USERNAME=admin
-            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            DB_USERNAME=${{ secrets.DB_USERNAME_PROD }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD_PROD }}
+            JWT_SECRET=${{ secrets.JWT_SECRET_PROD }}
             JWT_EXPIRATION=1800000
-            KAKAO_CLIENT_ID=${{ secrets.KAKAO_CLIENT_ID }}
-            KAKAO_CLIENT_SECRET=${{ secrets.KAKAO_CLIENT_SECRET }}
+            KAKAO_CLIENT_ID=${{ secrets.KAKAO_CLIENT_ID_PROD }}
+            KAKAO_CLIENT_SECRET=${{ secrets.KAKAO_CLIENT_SECRET_PROD }}
+            GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID_PROD }}
+            GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET_PROD }}
             AWS_S3_BUCKET=autocoin-s3-bucket
-            AWS_ACCESS_KEY=${{ secrets.AWS_ACCESS_KEY }}
-            AWS_SECRET_KEY=${{ secrets.AWS_SECRET_KEY }}
-            SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
+            AWS_ACCESS_KEY=${{ secrets.AWS_ACCESS_KEY_PROD }}
+            AWS_SECRET_KEY=${{ secrets.AWS_SECRET_KEY_PROD }}
+            SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL_PROD }}
             SLACK_NOTIFICATIONS_ENABLED=true
+            SENTRY_DSN=${{ secrets.SENTRY_DSN_PROD }}
+            SERP_API_KEY=${{ secrets.SERP_API_KEY_PROD }}
+            UPBIT_ENCRYPTION_KEY=${{ secrets.UPBIT_ENCRYPTION_KEY_PROD }}
             SPRING_PROFILES_ACTIVE=prod
             EOF
             
@@ -213,7 +218,7 @@ jobs:
     name: 📢 Notify
     runs-on: ubuntu-latest
     needs: [deploy-prod]
-    if: always()
+    if: always() && github.ref == 'refs/heads/main'
     
     steps:
       - name: Slack Notification
@@ -230,4 +235,4 @@ jobs:
             • **Environment**: Production
             • **Status**: ${{ job.status == 'success' && '✅ Success' || '❌ Failed' }}
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_PROD }}
