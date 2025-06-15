@@ -41,6 +41,11 @@ out/
 .env.*
 !.env.example
 env_backup/
+.env.ec2
+
+### Scripts with secrets ###
+scripts/set-env-ec2.sh
+scripts/deploy-ec2.sh
 
 ### Deprecated Files ###
 # deprecated/  # 주석 처리: 필요시 git에서 추적할 수 있도록
