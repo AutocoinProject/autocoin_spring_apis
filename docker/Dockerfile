@@ -3,7 +3,7 @@
 # ====================================
 
 # Build stage
-FROM openjdk:17-jdk-slim as builder
+FROM eclipse-temurin:17-jdk as builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
@@ -30,7 +30,7 @@ COPY src src
 RUN ./gradlew bootJar --no-daemon -x test
 
 # Production stage
-FROM openjdk:17-jre-slim
+FROM eclipse-temurin:17-jre
 
 # Create non-root user
 RUN groupadd -r autocoin && useradd -r -g autocoin autocoin
