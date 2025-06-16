@@ -43,7 +43,7 @@ jobs:
           context: .
           file: ./docker/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/autocoin-api:latest
+          tags: ghcr.io/autocoinproject/autocoin-api:latest
 
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
@@ -58,7 +58,7 @@ jobs:
             
             # 새 이미지 pull & 실행
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            docker pull ghcr.io/${{ github.repository_owner }}/autocoin-api:latest
+            docker pull ghcr.io/autocoinproject/autocoin-api:latest
             
             docker run -d \
               --name autocoin-api \
@@ -66,4 +66,4 @@ jobs:
               --restart unless-stopped \
               -e DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
               -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
-              ghcr.io/${{ github.repository_owner }}/autocoin-api:latest
+              ghcr.io/autocoinproject/autocoin-api:latest
