@@ -1,0 +1,79 @@
+HELP.md
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### VS Code ###
+.vscode/
+
+### Environment Files ###
+.env
+.env.*
+!.env.example
+env_backup/
+.env.ec2
+
+### Scripts with secrets ###
+scripts/set-env-ec2.sh
+scripts/deploy-ec2.sh
+
+### Deprecated Files ###
+# deprecated/  # 주석 처리: 필요시 git에서 추적할 수 있도록
+
+### Application Properties ###
+/src/main/resources/application-prod.yml
+application-temp.yml
+
+### Security Files ###
+*.key
+*.pem
+*.p12
+*.jks
+
+### Secrets ###
+secrets/
+private/
+credentials/
+github-secrets-setup.txt
+
+### Logs ###
+/logs
+*.log
+
+### OS ###
+.DS_Store
+Thumbs.db
+
+### Temporary ###
+tmp/
+temp/

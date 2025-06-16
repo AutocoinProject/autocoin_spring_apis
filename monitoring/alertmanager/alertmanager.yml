@@ -1,0 +1,250 @@
+global:
+  # SMTP 설정 (이메일 알림용)
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'alerts@autocoin.com'
+  smtp_auth_username: 'alerts@autocoin.com'
+  smtp_auth_password: ''
+  
+  # Slack 설정을 위한 글로벌 템플릿
+  slack_api_url: '{{ .SlackWebhookURL }}'
+
+# 알림 라우팅 규칙
+route:
+  # 그룹핑 기준
+  group_by: ['alertname', 'service', 'severity']
+  
+  # 그룹핑 대기 시간 (새 알림을 기다리는 시간)
+  group_wait: 30s
+  
+  # 그룹핑 간격 (같은 그룹의 후속 알림 전송 간격)
+  group_interval: 5m
+  
+  # 반복 알림 간격
+  repeat_interval: 4h
+  
+  # 기본 리시버
+  receiver: 'default-notifications'
+  
+  # 심각도별 라우팅 규칙
+  routes:
+    # Critical 알림 - 즉시 Slack 전송
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 10s
+      group_interval: 1m
+      repeat_interval: 30m
+      
+    # Warning 알림 - 일반 Slack 채널
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      group_wait: 1m
+      group_interval: 5m
+      repeat_interval: 2h
+      
+    # Info 알림 - 정보성 알림
+    - match:
+        severity: info
+      receiver: 'info-alerts'
+      group_wait: 5m
+      group_interval: 15m
+      repeat_interval: 12h
+      
+    # 특정 서비스별 라우팅
+    - match:
+        service: autocoin-api
+      receiver: 'api-alerts'
+      
+    - match:
+        service: mysql
+      receiver: 'database-alerts'
+      
+    - match:
+        service: system
+      receiver: 'system-alerts'
+
+# 알림 수신자 설정
+receivers:
+  # 기본 알림 수신자
+  - name: 'default-notifications'
+    slack_configs:
+      - api_url: '{{ .SlackWebhookURL }}'
+        channel: '#alerts'
+        title: '🚨 Autocoin Alert'
+        text: |
+          *Service:* {{ range .Alerts }}{{ .Labels.service }}{{ end }}
+          *Severity:* {{ range .Alerts }}{{ .Labels.severity }}{{ end }}
+          *Summary:* {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+          *Description:* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+          
+          *Time:* {{ .CommonLabels.alertname }} started at {{ .CommonAnnotations.timestamp }}
+        send_resolved: true
+        
+  # Critical 알림 (즉시 대응 필요)
+  - name: 'critical-alerts'
+    slack_configs:
+      - api_url: '{{ .SlackWebhookURL }}'
+        channel: '#critical-alerts'
+        username: 'AlertBot'
+        icon_emoji: ':fire:'
+        title: '🔥 CRITICAL ALERT - Immediate Action Required'
+        title_link: 'https://monitoring.autocoin.com'
+        color: 'danger'
+        text: |
+          *🚨 CRITICAL ISSUE DETECTED 🚨*
+          
+          *Service:* {{ range .Alerts }}{{ .Labels.service | toUpper }}{{ end }}
+          *Alert:* {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+          *Details:* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+          
+          *Instance:* {{ range .Alerts }}{{ .Labels.instance }}{{ end }}
+          *Started:* {{ range .Alerts }}{{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}{{ end }}
+          
+          <!channel> 긴급 대응이 필요합니다!
+          
+          *Quick Actions:*
+          • [View Grafana Dashboard](https://monitoring.autocoin.com)
+          • [Check Logs](https://monitoring.autocoin.com/logs)
+          • [System Status](https://status.autocoin.com)
+        actions:
+          - type: button
+            text: 'View Dashboard'
+            url: 'https://monitoring.autocoin.com'
+        send_resolved: true
+        
+  # Warning 알림
+  - name: 'warning-alerts'
+    slack_configs:
+      - api_url: '{{ .SlackWebhookURL }}'
+        channel: '#alerts'
+        username: 'AlertBot'
+        icon_emoji: ':warning:'
+        title: '⚠️ Warning Alert'
+        color: 'warning'
+        text: |
+          *⚠️ Warning Detected*
+          
+          *Service:* {{ range .Alerts }}{{ .Labels.service }}{{ end }}
+          *Alert:* {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+          *Details:* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+          
+          *Instance:* {{ range .Alerts }}{{ .Labels.instance }}{{ end }}
+          *Started:* {{ range .Alerts }}{{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}{{ end }}
+        send_resolved: true
+        
+  # Info 알림 (정보성)
+  - name: 'info-alerts'
+    slack_configs:
+      - api_url: '{{ .SlackWebhookURL }}'
+        channel: '#general'
+        username: 'InfoBot'
+        icon_emoji: ':information_source:'
+        title: 'ℹ️ Information Alert'
+        color: 'good'
+        text: |
+          *ℹ️ System Information*
+          
+          *Service:* {{ range .Alerts }}{{ .Labels.service }}{{ end }}
+          *Info:* {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+          *Details:* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+        send_resolved: false
+        
+  # API 서비스 전용 알림
+  - name: 'api-alerts'
+    slack_configs:
+      - api_url: '{{ .SlackWebhookURL }}'
+        channel: '#api-alerts'
+        username: 'API-AlertBot'
+        icon_emoji: ':gear:'
+        title: '🔧 API Service Alert'
+        color: '{{ if eq (index .Alerts 0).Labels.severity "critical" }}danger{{ else if eq (index .Alerts 0).Labels.severity "warning" }}warning{{ else }}good{{ end }}'
+        text: |
+          *🔧 API Service Issue*
+          
+          *Alert:* {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+          *Details:* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+          *Severity:* {{ range .Alerts }}{{ .Labels.severity | toUpper }}{{ end }}
+          
+          *Runbook:* {{ range .Alerts }}{{ .Annotations.runbook_url }}{{ end }}
+          
+          *Quick Health Check:*
+          ```
+          curl -sf https://api.autocoin.com/actuator/health
+          ```
+        send_resolved: true
+        
+  # 데이터베이스 전용 알림
+  - name: 'database-alerts'
+    slack_configs:
+      - api_url: '{{ .SlackWebhookURL }}'
+        channel: '#database-alerts'
+        username: 'DB-AlertBot'
+        icon_emoji: ':floppy_disk:'
+        title: '💾 Database Alert'
+        color: '{{ if eq (index .Alerts 0).Labels.severity "critical" }}danger{{ else }}warning{{ end }}'
+        text: |
+          *💾 Database Issue Detected*
+          
+          *Service:* {{ range .Alerts }}{{ .Labels.service | toUpper }}{{ end }}
+          *Alert:* {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+          *Details:* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+          
+          *Quick Actions:*
+          • Check database connections
+          • Review slow query log
+          • Monitor resource usage
+        send_resolved: true
+        
+  # 시스템 리소스 전용 알림
+  - name: 'system-alerts'
+    slack_configs:
+      - api_url: '{{ .SlackWebhookURL }}'
+        channel: '#system-alerts'
+        username: 'System-AlertBot'
+        icon_emoji: ':computer:'
+        title: '💻 System Resource Alert'
+        color: '{{ if eq (index .Alerts 0).Labels.severity "critical" }}danger{{ else }}warning{{ end }}'
+        text: |
+          *💻 System Resource Issue*
+          
+          *Host:* {{ range .Alerts }}{{ .Labels.instance }}{{ end }}
+          *Alert:* {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+          *Details:* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+          
+          *System Commands:*
+          ```
+          # Check system status
+          system-status
+          
+          # Cleanup if needed
+          cleanup-system
+          ```
+        send_resolved: true
+
+# 알림 억제 규칙 (중복 알림 방지)
+inhibit_rules:
+  # Critical 알림이 있으면 Warning 알림 억제
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'service', 'instance']
+    
+  # API 다운 시 모든 API 관련 알림 억제
+  - source_match:
+      alertname: 'AutocoinAPIDown'
+    target_match_re:
+      alertname: 'Autocoin.*'
+    equal: ['service']
+    
+  # 시스템 다운 시 해당 인스턴스의 모든 알림 억제
+  - source_match:
+      alertname: 'InstanceDown'
+    target_match_re:
+      alertname: '.*'
+    equal: ['instance']
+
+# 글로벌 템플릿 (선택사항)
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'

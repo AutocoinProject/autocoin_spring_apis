@@ -1,0 +1,65 @@
+# 특정 에러 패턴 감지
+name: Critical Error Pattern Alert
+type: any
+index: autocoin-logs-*
+realert:
+  minutes: 15
+
+filter:
+- bool:
+    should:
+    - match:
+        log_message: "NullPointerException"
+    - match:
+        log_message: "SQLException"
+    - match:
+        log_message: "OutOfMemoryError"
+    - match:
+        log_message: "Connection refused"
+    - match:
+        log_message: "Timeout"
+    - match:
+        log_message: "Authentication failed"
+
+alert:
+- "slack"
+
+slack:
+webhook_url: "YOUR_SLACK_WEBHOOK_URL"
+slack_channel_override: "#critical-alerts"
+slack_username_override: "ElastAlert"
+slack_emoji_override: ":rotating_light:"
+slack_msg_color: "danger"
+
+alert_text: |
+  🔥 **Critical Error Pattern Detected**
+  
+  **Application**: Autocoin API
+  **Error Type**: {0}
+  **Logger**: {1}
+  **Trace ID**: {2}
+  **Component**: {3}
+  
+  **Error Message**:
+  ```
+  {4}
+  ```
+  
+  **Timestamp**: {5}
+
+alert_text_args:
+  - level
+  - logger
+  - trace_id
+  - service_component
+  - log_message
+  - timestamp
+
+include:
+  - timestamp
+  - level
+  - logger
+  - log_message
+  - trace_id
+  - service_component
+  - thread

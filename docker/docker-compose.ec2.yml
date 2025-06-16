@@ -1,0 +1,78 @@
+# EC2 배포용 단순화된 Docker Compose
+version: '3.8'
+
+services:
+  # ====================================
+  # Autocoin Spring API
+  # ====================================
+  autocoin-api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: autocoin-api
+    ports:
+      - "8080:8080"
+    environment:
+      # 환경변수는 .env 파일에서 자동으로 로드됨
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-prod}
+      - API_PORT=${API_PORT:-8080}
+      - SERVER_ADDRESS=${SERVER_ADDRESS:-0.0.0.0}
+      - APP_INIT_ENABLED=${APP_INIT_ENABLED:-true}
+      
+      # Database
+      - DB_URL=${DB_URL}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DDL_AUTO=${DDL_AUTO:-validate}
+      
+      # Security
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION=${JWT_EXPIRATION:-1800000}
+      - JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION:-604800000}
+      
+      # OAuth2
+      - OAUTH2_ENABLED=${OAUTH2_ENABLED:-true}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - KAKAO_CLIENT_ID=${KAKAO_CLIENT_ID}
+      - KAKAO_CLIENT_SECRET=${KAKAO_CLIENT_SECRET}
+      
+      # AWS
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET:-autocoin-s3-bucket}
+      - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
+      - AWS_SECRET_KEY=${AWS_SECRET_KEY}
+      - AWS_REGION=${AWS_REGION:-ap-northeast-2}
+      
+      # External APIs
+      - UPBIT_ENCRYPTION_KEY=${UPBIT_ENCRYPTION_KEY}
+      - UPBIT_API_URL=https://api.upbit.com
+      - SERP_API_KEY=${SERP_API_KEY}
+      
+      # Monitoring
+      - SENTRY_DSN=${SENTRY_DSN}
+      - SENTRY_ENVIRONMENT=production
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+      - SLACK_NOTIFICATIONS_ENABLED=${SLACK_NOTIFICATIONS_ENABLED:-true}
+      
+      # CORS
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-https://autocoin.com}
+      
+      # Production settings
+      - SWAGGER_ENABLED=${SWAGGER_ENABLED:-false}
+      - LOG_LEVEL_ROOT=${LOG_LEVEL_ROOT:-INFO}
+      
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - autocoin-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  autocoin-network:
+    driver: bridge

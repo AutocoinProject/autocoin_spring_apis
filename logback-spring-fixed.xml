@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    
+    <!-- 프로파일별 로그 레벨 -->
+    <springProfile name="local,dev">
+        <logger name="com.autocoin" level="DEBUG"/>
+        <logger name="org.springframework.security" level="WARN"/>
+        <logger name="org.hibernate" level="WARN"/>
+        <logger name="org.apache.catalina" level="WARN"/>
+        <logger name="org.springframework.web" level="WARN"/>
+        <logger name="com.zaxxer.hikari" level="WARN"/>
+        <logger name="org.springframework.boot.autoconfigure" level="WARN"/>
+    </springProfile>
+    
+    <springProfile name="prod">
+        <logger name="com.autocoin" level="INFO"/>
+        <logger name="root" level="WARN"/>
+    </springProfile>
+
+    <!-- 개발용 콘솔 출력 (패턴 기반) -->
+    <springProfile name="local,dev">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%clr(%d{HH:mm:ss.SSS}){faint} %clr([%15.15t]){faint} %clr(%-5level) %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n%wEx</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <!-- 운영용 콘솔 출력 (JSON) -->
+    <springProfile name="prod">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <includeContext>true</includeContext>
+                <includeMdc>true</includeMdc>
+                <customFields>{"application":"autocoin-api"}</customFields>
+                <fieldNames>
+                    <timestamp>@timestamp</timestamp>
+                    <message>message</message>
+                    <logger>logger</logger>
+                    <thread>thread</thread>
+                    <level>level</level>
+                </fieldNames>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <!-- 파일 출력 (항상 JSON) -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/autocoin.log</file>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeContext>true</includeContext>
+            <includeMdc>true</includeMdc>
+            <customFields>{"application":"autocoin-api","environment":"${spring.profiles.active:-local}"}</customFields>
+            <fieldNames>
+                <timestamp>@timestamp</timestamp>
+                <message>message</message>
+                <logger>logger</logger>
+                <thread>thread</thread>
+                <level>level</level>
+            </fieldNames>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>logs/autocoin.%d{yyyy-MM-dd}.%i.gz</fileNamePattern>
+            <maxFileSize>100MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>3GB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <!-- TCP Appender (프로덕션에서만, 옵셔널로 변경) -->
+    <springProfile name="prod">
+        <if condition='isDefined("LOGSTASH_HOST")'>
+            <then>
+                <appender name="TCP" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+                    <destination>${LOGSTASH_HOST:-logstash}:${LOGSTASH_PORT:-5000}</destination>
+                    <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                        <includeContext>true</includeContext>
+                        <includeMdc>true</includeMdc>
+                        <customFields>{"application":"autocoin-api","environment":"${spring.profiles.active:-local}"}</customFields>
+                    </encoder>
+                    <connectionStrategy>
+                        <roundRobin>
+                            <connectionTTL>5 minutes</connectionTTL>
+                        </roundRobin>
+                    </connectionStrategy>
+                    <!-- 연결 실패 시 graceful하게 처리 -->
+                    <includeCallerData>false</includeCallerData>
+                    <keepAliveDuration>5 minutes</keepAliveDuration>
+                    <writeTimeout>1 minute</writeTimeout>
+                </appender>
+            </then>
+        </if>
+    </springProfile>
+
+    <!-- 에러 전용 파일 -->
+    <appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/autocoin-errors.log</file>
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>ERROR</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeContext>true</includeContext>
+            <includeMdc>true</includeMdc>
+            <customFields>{"application":"autocoin-api","log_type":"error"}</customFields>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>logs/autocoin-errors.%d{yyyy-MM-dd}.%i.gz</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>90</maxHistory>
+            <totalSizeCap>1GB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <!-- 개발 환경 -->
+    <springProfile name="local,dev">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE"/>
+            <appender-ref ref="ERROR_FILE"/>
+        </root>
+    </springProfile>
+
+    <!-- 운영 환경 (TCP appender는 조건부로만 추가) -->
+    <springProfile name="prod">
+        <root level="WARN">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE"/>
+            <appender-ref ref="ERROR_FILE"/>
+            <if condition='isDefined("LOGSTASH_HOST")'>
+                <then>
+                    <appender-ref ref="TCP"/>
+                </then>
+            </if>
+        </root>
+    </springProfile>
+
+    <!-- 특별한 로거들 -->
+    <logger name="com.autocoin.global.filter" level="WARN" additivity="false">
+        <appender-ref ref="FILE"/>
+    </logger>
+    
+    <logger name="com.autocoin.upbit" level="INFO" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <!-- 불필요한 로그 제거 -->
+    <logger name="org.springframework.boot.web.embedded.tomcat" level="WARN"/>
+    <logger name="org.apache.tomcat" level="WARN"/>
+    <logger name="org.springframework.boot.actuate.endpoint.jmx" level="WARN"/>
+    <logger name="org.hibernate.validator.internal.util.Version" level="WARN"/>
+    <logger name="org.eclipse.jetty.util.component.AbstractLifeCycle" level="ERROR"/>
+    <logger name="org.apache.sshd.common.util.SecurityUtils" level="WARN"/>
+    <logger name="org.springframework.boot.devtools" level="WARN"/>
+</configuration>

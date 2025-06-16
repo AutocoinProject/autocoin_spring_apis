@@ -1,0 +1,102 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  external_labels:
+    cluster: 'autocoin-production'
+    environment: 'prod'
+
+rule_files:
+  - "rules/*.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # Prometheus 자체 메트릭
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 60s
+
+  # Autocoin Spring Boot API
+  - job_name: 'autocoin-api'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['autocoin-api:8080']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    params:
+      format: ['prometheus']
+    metric_relabel_configs:
+      # JVM 메트릭 라벨 개선
+      - source_labels: [__name__]
+        regex: 'jvm_.*'
+        target_label: service
+        replacement: 'autocoin-api'
+      # HTTP 메트릭 라벨 개선  
+      - source_labels: [__name__]
+        regex: 'http_.*'
+        target_label: service
+        replacement: 'autocoin-api'
+
+  # MySQL Database (mysqld_exporter 필요시)
+  - job_name: 'mysql'
+    static_configs:
+      - targets: ['mysql-exporter:9104']
+    scrape_interval: 60s
+    scrape_timeout: 10s
+
+  # Redis Cache (redis_exporter 필요시)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 60s
+    scrape_timeout: 10s
+
+  # 시스템 메트릭 (node_exporter)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Docker 컨테이너 메트릭 (cAdvisor 필요시)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Nginx 메트릭 (nginx-prometheus-exporter 필요시)
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+    scrape_interval: 60s
+    scrape_timeout: 10s
+
+  # AlertManager 메트릭
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['alertmanager:9093']
+    scrape_interval: 60s
+
+  # Grafana 메트릭
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+    metrics_path: '/metrics'
+    scrape_interval: 60s
+
+  # Elasticsearch 메트릭 (elasticsearch_exporter 필요시)
+  - job_name: 'elasticsearch'
+    static_configs:
+      - targets: ['elasticsearch-exporter:9114']
+    scrape_interval: 60s
+    scrape_timeout: 10s
+
+# 글로벌 설정
+remote_write: []
+remote_read: []

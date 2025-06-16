@@ -1,0 +1,306 @@
+# ====================================
+# Autocoin Spring API 메인 설정파일
+# ====================================
+
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+  # Bean 오버라이딩 허용 (임시)
+  main:
+    allow-bean-definition-overriding: true
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: ${MAX_FILE_SIZE:10MB}
+      max-request-size: ${MAX_REQUEST_SIZE:10MB}
+      file-size-threshold: ${FILE_SIZE_THRESHOLD:2KB}
+
+  jpa:
+    hibernate:
+      ddl-auto: ${DDL_AUTO:update} # validate에서 update로 변경
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    properties:
+      hibernate:
+        # Named Query 자동 검색 비활성화
+        query:
+          named_query_startup_checking: false
+        # 배치 처리 설정
+        jdbc:
+          batch_size: ${HIBERNATE_BATCH_SIZE:100}
+          batch_versioned_data: true
+        order_inserts: true
+        order_updates: true
+        # SQL 로깅 비활성화 (운영 환경 고려)
+        format_sql: ${HIBERNATE_FORMAT_SQL:false}
+    show-sql: ${HIBERNATE_SHOW_SQL:false}
+    # Spring Data JPA Query Method 우선 활성화
+    repositories:
+      enabled: true
+      bootstrap-mode: default
+    # 데이터베이스 플랫폼 자동 감지
+    database-platform: org.hibernate.dialect.MySQLDialect
+    # Named Query 비활성화
+    defer-datasource-initialization: true
+
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID:}
+            client-secret: ${GOOGLE_CLIENT_SECRET:}
+            scope:
+              - email
+              - profile
+          kakao:
+            client-id: ${KAKAO_CLIENT_ID:}
+            client-secret: ${KAKAO_CLIENT_SECRET:}
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            client-authentication-method: client_secret_post
+            authorization-grant-type: authorization_code
+            provider: kakao
+            scope:
+              - profile_nickname
+            client-name: Kakao
+        provider:
+          kakao:
+            authorization-uri: https://kauth.kakao.com/oauth/authorize
+            token-uri: https://kauth.kakao.com/oauth/token
+            user-info-uri: https://kapi.kakao.com/v2/user/me
+            user-name-attribute: id
+
+# ====================================
+# 서버 설정
+# ====================================
+server:
+  address: ${SERVER_ADDRESS:0.0.0.0}
+  port: ${API_PORT:8080}
+  tomcat:
+    max-http-form-post-size: ${TOMCAT_MAX_FORM_SIZE:10MB}
+    max-swallow-size: ${TOMCAT_MAX_SWALLOW_SIZE:10MB}
+
+# ====================================
+# JWT 인증 설정
+# ====================================
+jwt:
+  secret: ${JWT_SECRET:}
+  expiration: ${JWT_EXPIRATION:3600000}
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:86400000}
+
+# ====================================
+# CORS 설정
+# ====================================
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  allowed-methods: ${CORS_ALLOWED_METHODS:GET,POST,PUT,DELETE,OPTIONS}
+  allowed-headers: ${CORS_ALLOWED_HEADERS:Authorization,Content-Type}
+  max-age: ${CORS_MAX_AGE:3600}
+
+# ====================================
+# Swagger/OpenAPI 설정
+# ====================================
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: ${SWAGGER_ENABLED:false}
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: ${SWAGGER_ENABLED:false}
+    operationsSorter: method
+    tagsSorter: alpha
+    display-request-duration: true
+    groups-order: asc
+    disable-swagger-default-url: true
+    default-models-expand-depth: 1
+    default-model-expand-depth: 3
+    doc-expansion: list
+  packages-to-scan:
+    - com.autocoin
+  paths-to-match:
+    - /api/v1/**
+
+# ====================================
+# 뉴스 스케줄링 설정
+# ====================================
+news:
+  scheduler:
+    collect: "${NEWS_COLLECT_CRON:0 0 * * * *}"
+    cleanup: "${NEWS_CLEANUP_CRON:0 0 15 * * *}"
+    max-news-count: ${NEWS_MAX_COUNT:50}
+    enabled: ${NEWS_SCHEDULER_ENABLED:true}
+
+# SerpAPI 설정
+serp:
+  api:
+    key: ${SERP_API_KEY:}
+
+# ====================================
+# 애플리케이션 설정
+# ====================================
+app:
+  init:
+    enabled: ${APP_INIT_ENABLED:false} # 임시 비활성화
+  upbit:
+    api:
+      url: ${UPBIT_API_URL:https://api.upbit.com}
+      timeout: ${UPBIT_API_TIMEOUT:30000}
+      rate-limit-enabled: ${UPBIT_RATE_LIMIT_ENABLED:true}
+    encryption:
+      key: ${UPBIT_ENCRYPTION_KEY:}
+    websocket:
+      url: ${UPBIT_WEBSOCKET_URL:wss://api.upbit.com/websocket/v1}
+
+# AWS 설정
+cloud:
+  aws:
+    s3:
+      bucket: ${AWS_S3_BUCKET:}
+    credentials:
+      access-key: ${AWS_ACCESS_KEY:}
+      secret-key: ${AWS_SECRET_KEY:}
+    region:
+      static: ${AWS_REGION:ap-northeast-2}
+    stack:
+      auto: ${AWS_STACK_AUTO:false}
+
+# OAuth2 설정 (조건부 활성화)
+oauth2:
+  enabled: ${OAUTH2_ENABLED:false}
+  redirect-uri: ${OAUTH2_REDIRECT_URI:http://localhost:3000/oauth2/redirect}
+
+# Flask API 연동 설정
+flask:
+  api:
+    url: ${FLASK_API_URL:http://localhost:5000}
+  http:
+    client:
+      connect-timeout: ${HTTP_CLIENT_CONNECT_TIMEOUT:5000}
+      read-timeout: ${HTTP_CLIENT_READ_TIMEOUT:30000}
+
+# ====================================
+# 로깅 설정 (실무 수준)
+# ====================================
+logging:
+  pattern:
+    console: "${LOG_PATTERN_CONSOLE:%d{HH:mm:ss.SSS} %-5level %logger{20} -%n%msg%n}"
+    file: "${LOG_PATTERN_FILE:%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{traceId:-}] %logger{36} -%n%msg%n}"
+  
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    
+    # 비즈니스 로직만 유지
+    com.autocoin.chart.application: ${LOG_LEVEL_AUTOCOIN_CHART:INFO}
+    com.autocoin.auth.application: ${LOG_LEVEL_AUTOCOIN_AUTH:INFO}
+    com.autocoin.trading.application: ${LOG_LEVEL_AUTOCOIN_TRADING:INFO}
+    
+    # 로그인 디버깅을 위해 임시로 DEBUG
+    com.autocoin.user.application: ${LOG_LEVEL_AUTOCOIN_USER:INFO}
+    
+    # 필터 로그 최소화
+    com.autocoin.global.filter: ${LOG_LEVEL_AUTOCOIN_FILTER:WARN}
+    com.autocoin.global.auth.filter: ${LOG_LEVEL_AUTOCOIN_AUTH_FILTER:WARN}
+    
+    # 외부 라이브러리 최소화
+    org.springframework: ${LOG_LEVEL_SPRING:WARN}
+    org.springframework.security: ${LOG_LEVEL_SPRING_SECURITY:WARN}
+    org.springframework.web: ${LOG_LEVEL_SPRING_WEB:WARN}
+    org.springframework.data: ${LOG_LEVEL_SPRING_DATA:WARN}
+    org.springframework.boot.devtools: WARN
+    
+    # Hibernate 관련 모든 로그 최소화
+    org.hibernate: ERROR
+    org.hibernate.SQL: ERROR
+    org.hibernate.type: ERROR
+    org.hibernate.orm: ERROR
+    org.hibernate.resource: ERROR
+    org.hibernate.internal: ERROR
+    org.hibernate.boot: ERROR
+    org.hibernate.boot.model: ERROR
+    org.hibernate.engine: ERROR
+    org.hibernate.mapping: ERROR
+    org.hibernate.query: ERROR
+    
+    # HikariCP 로그 최소화
+    com.zaxxer.hikari: WARN
+    com.zaxxer.hikari.HikariConfig: ERROR
+    com.zaxxer.hikari.pool: WARN
+    
+    # 에러만 표시
+    org.apache.tomcat: ${LOG_LEVEL_TOMCAT:ERROR}
+    org.eclipse.jetty: ${LOG_LEVEL_JETTY:ERROR}
+  
+  # 로그 파일 설정
+  file:
+    name: ${LOG_FILE_NAME:logs/autocoin.log}
+    max-size: ${LOG_FILE_MAX_SIZE:100MB}
+    max-history: ${LOG_FILE_MAX_HISTORY:30}
+
+# 애플리케이션별 로깅 제어
+autocoin:
+  logging:
+    # 상세 필터 로그 비활성화
+    request-filter:
+      enabled: ${AUTOCOIN_LOG_REQUEST_FILTER:false}
+    api-filter:
+      enabled: ${AUTOCOIN_LOG_API_FILTER:true}
+      detailed: ${AUTOCOIN_LOG_API_FILTER_DETAILED:false}
+
+# Slack 알림 설정
+slack:
+  webhook:
+    url: ${SLACK_WEBHOOK_URL:}
+  notifications:
+    enabled: ${SLACK_NOTIFICATIONS_ENABLED:false}
+  channels:
+    error: ${SLACK_ERROR_CHANNEL:#errors}
+    alert: ${SLACK_ALERT_CHANNEL:#alerts}
+    trade: ${SLACK_TRADE_CHANNEL:#trades}
+
+# 기본 모니터링 설정
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ${MANAGEMENT_ENDPOINTS:health,info,metrics,prometheus}
+      cors:
+        allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+        allowed-methods: ${MANAGEMENT_CORS_METHODS:GET,POST}
+  endpoint:
+    health:
+      show-details: ${MANAGEMENT_HEALTH_SHOW_DETAILS:when-authorized}
+      show-components: ${MANAGEMENT_HEALTH_SHOW_COMPONENTS:when-authorized}
+    metrics:
+      enabled: ${MANAGEMENT_METRICS_ENABLED:true}
+    prometheus:
+      enabled: ${MANAGEMENT_PROMETHEUS_ENABLED:true}
+  metrics:
+    export:
+      prometheus:
+        enabled: ${MANAGEMENT_PROMETHEUS_ENABLED:true}
+    tags:
+      application: ${MANAGEMENT_METRICS_APP_NAME:autocoin-api}
+      environment: ${spring.profiles.active:local}
+
+# Sentry 설정
+sentry:
+  dsn: ${SENTRY_DSN:}
+  environment: ${SENTRY_ENVIRONMENT:local}
+  release: ${SENTRY_RELEASE:1.0.0}
+  traces-sample-rate: ${SENTRY_TRACES_SAMPLE_RATE:0.1}
+  debug: ${SENTRY_DEBUG:false}
+  send-default-pii: ${SENTRY_SEND_DEFAULT_PII:false}
+  attach-stacktrace: ${SENTRY_ATTACH_STACKTRACE:true}
+  attach-threads: ${SENTRY_ATTACH_THREADS:false}
+  enable-tracing: ${SENTRY_ENABLE_TRACING:false}
+  max-breadcrumbs: ${SENTRY_MAX_BREADCRUMBS:100}
+  max-cache-items: ${SENTRY_MAX_CACHE_ITEMS:30}
+  in-app-includes:
+    - com.autocoin

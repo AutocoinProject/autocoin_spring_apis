@@ -1,0 +1,51 @@
+spring:
+  # 데이터베이스 설정 (H2 인메모리)
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  
+  # JPA 설정
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+  
+  # H2 Console 활성화
+  h2:
+    console:
+      enabled: true
+  
+  # 자동 구성 제외
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration
+      - org.springframework.boot.autoconfigure.security.oauth2.client.reactive.ReactiveOAuth2ClientAutoConfiguration
+
+# 로깅 설정
+logging:
+  level:
+    root: WARN
+    com.autocoin: INFO
+    org.springframework.web: WARN
+    org.springframework.security: WARN
+    org.hibernate: WARN
+
+# 애플리케이션 설정
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+# OAuth2 비활성화
+oauth2:
+  enabled: false
+
+# JWT 설정
+jwt:
+  secret: test-jwt-secret-key-at-least-32-characters-long
+  expiration: 3600000
+  refresh-expiration: 86400000

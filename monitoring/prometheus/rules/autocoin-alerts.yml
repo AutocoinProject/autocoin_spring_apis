@@ -1,0 +1,434 @@
+groups:
+  # ====================================
+  # Autocoin API Application Alerts
+  # ====================================
+  - name: autocoin-api-alerts
+    rules:
+      # API 서버 다운
+      - alert: AutocoinAPIDown
+        expr: up{job="autocoin-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: autocoin-api
+        annotations:
+          summary: "Autocoin API is down"
+          description: "Autocoin API has been down for more than 1 minute"
+          runbook_url: "https://docs.autocoin.com/runbooks/api-down"
+
+      # 높은 응답 시간
+      - alert: AutocoinHighResponseTime
+        expr: |
+          histogram_quantile(0.95, 
+            rate(http_server_requests_seconds_bucket{job="autocoin-api"}[5m])
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: autocoin-api
+        annotations:
+          summary: "High API response time"
+          description: "95th percentile response time is {{ $value }}s for more than 5 minutes"
+
+      # 높은 에러율
+      - alert: AutocoinHighErrorRate
+        expr: |
+          rate(http_server_requests_total{job="autocoin-api",status=~"5.."}[5m]) /
+          rate(http_server_requests_total{job="autocoin-api"}[5m]) * 100 > 5
+        for: 3m
+        labels:
+          severity: warning
+          service: autocoin-api
+        annotations:
+          summary: "High API error rate"
+          description: "API error rate is {{ $value }}% for more than 3 minutes"
+
+      # Critical 에러율 (10% 이상)
+      - alert: AutocoinCriticalErrorRate
+        expr: |
+          rate(http_server_requests_total{job="autocoin-api",status=~"5.."}[5m]) /
+          rate(http_server_requests_total{job="autocoin-api"}[5m]) * 100 > 10
+        for: 1m
+        labels:
+          severity: critical
+          service: autocoin-api
+        annotations:
+          summary: "Critical API error rate"
+          description: "API error rate is {{ $value }}% for more than 1 minute"
+
+      # JVM 메모리 사용률 높음
+      - alert: AutocoinHighMemoryUsage
+        expr: |
+          (jvm_memory_used_bytes{job="autocoin-api"} / jvm_memory_max_bytes{job="autocoin-api"}) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: autocoin-api
+        annotations:
+          summary: "High JVM memory usage"
+          description: "JVM memory usage is {{ $value }}% for more than 5 minutes"
+
+      # JVM 메모리 Critical
+      - alert: AutocoinCriticalMemoryUsage
+        expr: |
+          (jvm_memory_used_bytes{job="autocoin-api"} / jvm_memory_max_bytes{job="autocoin-api"}) * 100 > 90
+        for: 2m
+        labels:
+          severity: critical
+          service: autocoin-api
+        annotations:
+          summary: "Critical JVM memory usage"
+          description: "JVM memory usage is {{ $value }}% for more than 2 minutes"
+
+      # 데이터베이스 연결 풀 부족
+      - alert: AutocoinDatabaseConnectionPoolLow
+        expr: |
+          hikaricp_connections_active{job="autocoin-api"} / hikaricp_connections_max{job="autocoin-api"} * 100 > 80
+        for: 3m
+        labels:
+          severity: warning
+          service: autocoin-api
+        annotations:
+          summary: "Database connection pool usage high"
+          description: "Database connection pool usage is {{ $value }}% for more than 3 minutes"
+
+      # 요청 수 급증
+      - alert: AutocoinHighRequestVolume
+        expr: |
+          rate(http_server_requests_total{job="autocoin-api"}[5m]) > 100
+        for: 5m
+        labels:
+          severity: info
+          service: autocoin-api
+        annotations:
+          summary: "High request volume detected"
+          description: "API is receiving {{ $value }} requests/second for more than 5 minutes"
+
+  # ====================================
+  # System Resource Alerts
+  # ====================================
+  - name: system-alerts
+    rules:
+      # CPU 사용률 높음
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% for more than 5 minutes on {{ $labels.instance }}"
+
+      # CPU Critical
+      - alert: CriticalCPUUsage
+        expr: |
+          100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+        for: 2m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "Critical CPU usage"
+          description: "CPU usage is {{ $value }}% for more than 2 minutes on {{ $labels.instance }}"
+
+      # 메모리 사용률 높음
+      - alert: HighMemoryUsage
+        expr: |
+          (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}% for more than 5 minutes on {{ $labels.instance }}"
+
+      # 메모리 Critical
+      - alert: CriticalMemoryUsage
+        expr: |
+          (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 90
+        for: 2m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "Critical memory usage"
+          description: "Memory usage is {{ $value }}% for more than 2 minutes on {{ $labels.instance }}"
+
+      # 디스크 사용률 높음
+      - alert: HighDiskUsage
+        expr: |
+          (node_filesystem_size_bytes - node_filesystem_avail_bytes) / node_filesystem_size_bytes * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High disk usage"
+          description: "Disk usage is {{ $value }}% for more than 5 minutes on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+
+      # 디스크 Critical
+      - alert: CriticalDiskUsage
+        expr: |
+          (node_filesystem_size_bytes - node_filesystem_avail_bytes) / node_filesystem_size_bytes * 100 > 90
+        for: 2m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "Critical disk usage"
+          description: "Disk usage is {{ $value }}% for more than 2 minutes on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+
+      # 디스크 I/O 높음
+      - alert: HighDiskIO
+        expr: |
+          rate(node_disk_io_time_seconds_total[5m]) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High disk I/O"
+          description: "Disk I/O usage is {{ $value }}% for more than 5 minutes on {{ $labels.instance }}"
+
+  # ====================================
+  # Database Alerts
+  # ====================================
+  - name: database-alerts
+    rules:
+      # MySQL 서버 다운
+      - alert: MySQLDown
+        expr: up{job="mysql"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: mysql
+        annotations:
+          summary: "MySQL is down"
+          description: "MySQL database has been down for more than 1 minute"
+
+      # MySQL 연결 수 높음
+      - alert: MySQLHighConnections
+        expr: |
+          mysql_global_status_threads_connected / mysql_global_variables_max_connections * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: mysql
+        annotations:
+          summary: "High MySQL connections"
+          description: "MySQL connection usage is {{ $value }}% for more than 5 minutes"
+
+      # MySQL 슬로우 쿼리 증가
+      - alert: MySQLSlowQueries
+        expr: |
+          rate(mysql_global_status_slow_queries[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: mysql
+        annotations:
+          summary: "High number of slow queries"
+          description: "MySQL slow queries rate is {{ $value }} queries/second for more than 5 minutes"
+
+  # ====================================
+  # Redis Alerts
+  # ====================================
+  - name: redis-alerts
+    rules:
+      # Redis 서버 다운
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: redis
+        annotations:
+          summary: "Redis is down"
+          description: "Redis cache server has been down for more than 1 minute"
+
+      # Redis 메모리 사용률 높음
+      - alert: RedisHighMemoryUsage
+        expr: |
+          redis_memory_used_bytes / redis_config_maxmemory_bytes * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "High Redis memory usage"
+          description: "Redis memory usage is {{ $value }}% for more than 5 minutes"
+
+      # Redis 연결 수 높음
+      - alert: RedisHighConnections
+        expr: |
+          redis_connected_clients > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "High Redis connections"
+          description: "Redis has {{ $value }} connected clients for more than 5 minutes"
+
+  # ====================================
+  # Business Logic Alerts
+  # ====================================
+  - name: business-alerts
+    rules:
+      # 사용자 등록 급증
+      - alert: AutocoinHighUserRegistration
+        expr: |
+          increase(user_registration_total[1h]) > 100
+        for: 0m
+        labels:
+          severity: info
+          service: autocoin-api
+        annotations:
+          summary: "High user registration rate"
+          description: "{{ $value }} users registered in the last hour"
+
+      # 업비트 API 에러 급증
+      - alert: AutocoinUpbitAPIErrors
+        expr: |
+          rate(upbit_api_errors_total[5m]) > 1
+        for: 3m
+        labels:
+          severity: warning
+          service: autocoin-api
+        annotations:
+          summary: "High Upbit API errors"
+          description: "Upbit API error rate is {{ $value }} errors/second for more than 3 minutes"
+
+      # 뉴스 수집 실패
+      - alert: AutocoinNewsCollectionFailure
+        expr: |
+          rate(news_collection_failures_total[10m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          service: autocoin-api
+        annotations:
+          summary: "News collection failures"
+          description: "News collection failure rate is {{ $value }} failures/second for more than 10 minutes"
+
+      # 인증 실패 급증 (보안 위험)
+      - alert: AutocoinHighAuthFailures
+        expr: |
+          rate(authentication_failures_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          service: autocoin-api
+        annotations:
+          summary: "High authentication failure rate"
+          description: "Authentication failure rate is {{ $value }} failures/second for more than 2 minutes"
+
+  # ====================================
+  # Container Alerts
+  # ====================================
+  - name: container-alerts
+    rules:
+      # 컨테이너 재시작 빈발
+      - alert: ContainerRestartingFrequently
+        expr: |
+          rate(container_restart_count[1h]) > 5
+        for: 0m
+        labels:
+          severity: warning
+          service: docker
+        annotations:
+          summary: "Container restarting frequently"
+          description: "Container {{ $labels.name }} has restarted {{ $value }} times in the last hour"
+
+      # 컨테이너 OOM 발생
+      - alert: ContainerOOMKilled
+        expr: |
+          increase(container_oom_kills_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: docker
+        annotations:
+          summary: "Container killed by OOM"
+          description: "Container {{ $labels.name }} was killed by Out of Memory"
+
+  # ====================================
+  # SSL Certificate Alerts
+  # ====================================
+  - name: ssl-alerts
+    rules:
+      # SSL 인증서 만료 임박 (30일)
+      - alert: SSLCertificateExpiringSoon
+        expr: |
+          ssl_certificate_expiry_days < 30
+        for: 1h
+        labels:
+          severity: warning
+          service: ssl
+        annotations:
+          summary: "SSL certificate expiring soon"
+          description: "SSL certificate for {{ $labels.domain }} expires in {{ $value }} days"
+
+      # SSL 인증서 만료 임박 (7일)
+      - alert: SSLCertificateExpiringCritical
+        expr: |
+          ssl_certificate_expiry_days < 7
+        for: 1h
+        labels:
+          severity: critical
+          service: ssl
+        annotations:
+          summary: "SSL certificate expiring very soon"
+          description: "SSL certificate for {{ $labels.domain }} expires in {{ $value }} days"
+
+  # ====================================
+  # Monitoring System Alerts
+  # ====================================
+  - name: monitoring-alerts
+    rules:
+      # Prometheus 타겟 다운
+      - alert: PrometheusTargetDown
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: monitoring
+        annotations:
+          summary: "Prometheus target down"
+          description: "Prometheus target {{ $labels.job }}/{{ $labels.instance }} has been down for more than 5 minutes"
+
+      # Grafana 다운
+      - alert: GrafanaDown
+        expr: up{job="grafana"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: monitoring
+        annotations:
+          summary: "Grafana is down"
+          description: "Grafana monitoring dashboard has been down for more than 5 minutes"
+
+      # AlertManager 다운
+      - alert: AlertManagerDown
+        expr: up{job="alertmanager"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: monitoring
+        annotations:
+          summary: "AlertManager is down"
+          description: "AlertManager has been down for more than 5 minutes - alerts will not be sent"
+
+      # Elasticsearch 다운
+      - alert: ElasticsearchDown
+        expr: up{job="elasticsearch"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: monitoring
+        annotations:
+          summary: "Elasticsearch is down"
+          description: "Elasticsearch has been down for more than 5 minutes - log analysis unavailable"

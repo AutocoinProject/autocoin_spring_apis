@@ -1,0 +1,141 @@
+name: 🚀 Production Deploy (Legacy)
+
+# 간단한 프로덕션 배포 - main 브랜치 전용
+# 새로운 multi-job workflow는 main-ci-cd.yml을 사용하세요
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: 'Force deployment without tests'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/autocoin-api
+
+jobs:
+  quick-deploy:
+    name: 🚀 Quick Production Deploy
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://api.autocoin.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'corretto'
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run tests
+        if: ${{ !inputs.force_deploy }}
+        run: ./gradlew test
+
+      - name: Build application
+        run: ./gradlew build ${{ inputs.force_deploy && '-x test' || '' }}
+
+      # Docker 이미지 빌드 및 푸시
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      # EC2에 배포
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_SSH_PORT || 22 }}
+          script: |
+            echo "🚀 Quick deployment starting..."
+            
+            IMAGE_NAME="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+            CONTAINER_NAME="autocoin-api-prod"
+            
+            # Login to registry
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            # Pull new image
+            docker pull $IMAGE_NAME
+            
+            # Stop and remove existing container
+            docker stop $CONTAINER_NAME || true
+            docker rm $CONTAINER_NAME || true
+            
+            # Start new container
+            docker run -d \
+              --name $CONTAINER_NAME \
+              --restart unless-stopped \
+              -p 8080:8080 \
+              --env-file /opt/autocoin/.env.prod \
+              $IMAGE_NAME
+            
+            # Wait for health check
+            echo "⏳ Waiting for application..."
+            for i in {1..30}; do
+              if curl -sf http://localhost:8080/actuator/health > /dev/null; then
+                echo "✅ Deployment successful!"
+                break
+              fi
+              sleep 5
+            done
+            
+            echo "🎉 Quick deployment completed!"
+
+      - name: Notify deployment
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          channel: '#deployments'
+          text: |
+            ${{ job.status == 'success' && '✅' || '❌' }} *Quick Production Deploy*
+            
+            • **Status**: ${{ job.status }}
+            • **Branch**: `${{ github.ref_name }}`
+            • **Commit**: `${{ github.sha }}`
+            • **Author**: ${{ github.actor }}
+            • **Force Deploy**: ${{ inputs.force_deploy }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

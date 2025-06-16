@@ -1,0 +1,222 @@
+plugins {
+    id 'org.springframework.boot' version '3.2.4'
+    id 'io.spring.dependency-management' version '1.1.4'
+    id 'java'
+    id 'jacoco'  // JaCoCo 플러그인 추가
+}
+
+group = 'com.autocoin'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    sourceCompatibility = '17'
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+    // 모든 의존성에서 commons-logging 제외
+    all {
+        exclude group: 'commons-logging', module: 'commons-logging'
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+springBoot {
+    mainClass = 'com.autocoin.AutocoinSpringApiApplication'
+}
+
+dependencies {
+    // Spring Boot Starters
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+    implementation 'org.springframework.boot:spring-boot-starter-cache'
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
+    implementation 'org.springframework.boot:spring-boot-configuration-processor'
+    
+    // WebSocket 및 Messaging 지원
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
+    implementation 'org.springframework:spring-messaging'
+    
+    // Redis 지원
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'io.lettuce:lettuce-core'
+    
+    // Retry 기능
+    implementation 'org.springframework.retry:spring-retry'
+    implementation 'org.springframework:spring-aspects'
+    
+    // AWS S3
+    implementation('com.amazonaws:aws-java-sdk-s3:1.12.700') {
+        exclude group: 'commons-logging', module: 'commons-logging'
+    }
+    
+    // JWT
+    implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
+    
+    // Swagger OpenAPI 의존성 (Spring Boot 3.x용)
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
+    
+    // HTTP Client
+    implementation 'org.apache.httpcomponents:httpclient:4.5.14'
+    
+    // Jackson for JSON processing
+    implementation 'com.fasterxml.jackson.core:jackson-core'
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+    
+    // Database
+    runtimeOnly 'com.mysql:mysql-connector-j'
+    runtimeOnly 'com.h2database:h2' // 테스트용
+    
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    
+    // Development tools
+    developmentOnly 'org.springframework.boot:spring-boot-devtools'
+    
+    // Monitoring & Observability
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+    implementation 'io.micrometer:micrometer-tracing-bridge-brave'
+    implementation 'io.micrometer:micrometer-observation'
+    
+    // Sentry for Error Tracking
+    implementation 'io.sentry:sentry-spring-boot-starter-jakarta:7.14.0'
+    implementation 'io.sentry:sentry-logback:7.14.0'
+    
+    // Additional monitoring dependencies
+    implementation 'net.ttddyy:datasource-proxy:1.8.1'
+    
+    // ELK Stack integration
+    implementation 'net.logstash.logback:logstash-logback-encoder:7.4'
+    implementation 'ch.qos.logback:logback-classic'
+    implementation 'ch.qos.logback:logback-core'
+    
+    // Test
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:mysql'
+    testImplementation 'com.h2database:h2'
+    testImplementation 'io.findify:s3mock_2.13:0.2.6'
+}
+
+// JaCoCo 설정
+jacoco {
+    toolVersion = "0.8.11"
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+    
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                "**/config/**",
+                "**/dto/**",
+                "**/entity/**",
+                "**/AutocoinSpringApiApplication.class",
+                "**/exception/**",
+                "**/repository/**"
+            ])
+        }))
+    }
+}
+
+jacocoTestCoverageVerification {
+    dependsOn jacocoTestReport
+    violationRules {
+        rule {
+            element = 'CLASS'
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.5
+            }
+            limit {
+                counter = 'BRANCH'
+                value = 'COVEREDRATIO'
+                minimum = 0.5
+            }
+            excludes = [
+                '*.config.*',
+                '*.dto.*',
+                '*.entity.*',
+                '*.exception.*',
+                '*.AutocoinSpringApiApplication'
+            ]
+        }
+    }
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    
+    jvmArgs = [
+        '--add-opens=java.base/java.lang=ALL-UNNAMED',
+        '--add-opens=java.base/java.util=ALL-UNNAMED',
+        '--add-opens=java.base/java.time=ALL-UNNAMED'
+    ]
+    
+    systemProperty 'spring.profiles.active', 'test'
+    systemProperty 'spring.test.context.cache.maxSize', '1'
+    systemProperty 'sentry.dsn', ''
+    systemProperty 'sentry.enabled', 'false'
+    systemProperty 'logging.level.org.springframework.test.context', 'DEBUG'
+    systemProperty 'logging.level.org.springframework.boot.test.context', 'DEBUG'
+    systemProperty 'logging.level.org.springframework.context', 'DEBUG'
+    
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat "full"
+        showExceptions true
+        showCauses true
+        showStackTraces true
+    }
+    
+    maxHeapSize = "1024m"
+    maxParallelForks = 1
+    finalizedBy jacocoTestReport
+}
+
+compileJava {
+    options.fork = true
+    options.incremental = false
+}
+
+jar {
+    enabled = false
+}
+
+bootJar {
+    enabled = true
+    archiveClassifier = ''
+    mainClass = 'com.autocoin.AutocoinSpringApiApplication'
+}
+
+if (project.hasProperty('skipTests')) {
+    test.enabled = false
+}
+
+clean {
+    doFirst {
+        delete "${buildDir}"
+        delete "${rootDir}/out"
+    }
+}

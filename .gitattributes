@@ -1,0 +1,10 @@
+# Git attributes for the project
+
+# Ensure shell scripts use LF
+*.sh text eol=lf
+
+# Ensure .env.secret is treated as binary
+.env.secret binary
+
+# Prevent git from trying to merge .env.secret
+.env.secret merge=binary

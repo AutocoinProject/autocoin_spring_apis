@@ -1,0 +1,228 @@
+# ===========================================
+# 테스트 환경 설정 (완전한 버전)
+# ===========================================
+spring:
+  # Bean 오버라이딩 허용
+  main:
+    allow-bean-definition-overriding: true
+  
+  # H2 인메모리 데이터베이스
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=MySQL
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  
+  # JPA 설정
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    properties:
+      hibernate:
+        format_sql: false
+        show_sql: false
+        dialect: org.hibernate.dialect.H2Dialect
+        query:
+          named_query_startup_checking: false
+        jdbc:
+          batch_size: 100
+          batch_versioned_data: true
+        order_inserts: true
+        order_updates: true
+    database-platform: org.hibernate.dialect.H2Dialect
+    defer-datasource-initialization: false
+    repositories:
+      enabled: true
+      bootstrap-mode: default
+  
+  # H2 콘솔 설정
+  h2:
+    console:
+      enabled: true
+  
+  # 스케줄링 비활성화
+  task:
+    scheduling:
+      enabled: false
+
+  # Jackson 설정
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+
+  # Multipart 설정
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 10MB
+      max-request-size: 10MB
+      file-size-threshold: 2KB
+
+  # OAuth2 비활성화
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: test-client-id
+            client-secret: test-client-secret
+          kakao:
+            client-id: test-kakao-id
+            client-secret: test-kakao-secret
+
+# ===========================================
+# 서버 설정
+# ===========================================
+server:
+  address: localhost
+  port: 8080
+
+# ===========================================
+# 애플리케이션 설정
+# ===========================================
+app:
+  init:
+    enabled: false
+  upbit:
+    api:
+      url: https://api.upbit.com
+      timeout: 30000
+      rate-limit-enabled: false
+    encryption:
+      key: test-encryption-key
+    websocket:
+      url: wss://api.upbit.com/websocket/v1
+    enabled: false
+
+# ===========================================
+# AWS 설정 (테스트용)
+# ===========================================
+cloud:
+  aws:
+    s3:
+      bucket: test-bucket
+    credentials:
+      access-key: test-access-key
+      secret-key: test-secret-key
+    region:
+      static: us-east-1
+    stack:
+      auto: false
+
+# ===========================================
+# 외부 서비스 비활성화
+# ===========================================
+sentry:
+  dsn: ""
+  enabled: false
+  debug: false
+  
+news:
+  scheduler:
+    enabled: false
+    collect: "0 0 * * * *"
+    cleanup: "0 0 15 * * *"
+    max-news-count: 50
+
+oauth2:
+  enabled: false
+  redirect-uri: http://localhost:3000/oauth2/redirect
+
+slack:
+  webhook:
+    url: ""
+  notifications:
+    enabled: false
+  channels:
+    error: "#test-errors"
+    alert: "#test-alerts"
+    trade: "#test-trades"
+
+# ===========================================
+# API 설정
+# ===========================================
+serp:
+  api:
+    key: test-serp-key
+
+flask:
+  api:
+    url: http://localhost:5000
+  http:
+    client:
+      connect-timeout: 5000
+      read-timeout: 30000
+
+# ===========================================
+# JWT 설정
+# ===========================================
+jwt:
+  secret: test-jwt-secret-key-for-testing-purposes-only-not-for-production-environment-minimum-32-characters
+  expiration: 1800000
+  refresh-expiration: 86400000
+
+# ===========================================
+# CORS 설정
+# ===========================================
+cors:
+  allowed-origins: http://localhost:3000
+  allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+  allowed-headers: Authorization,Content-Type
+  max-age: 3600
+
+# ===========================================
+# Swagger/OpenAPI 비활성화
+# ===========================================
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+# ===========================================
+# 로깅 최소화
+# ===========================================
+logging:
+  level:
+    root: WARN
+    com.autocoin: INFO
+    org.springframework: WARN
+    org.springframework.security: WARN
+    org.springframework.web: WARN
+    org.springframework.data: WARN
+    org.hibernate: ERROR
+    com.zaxxer.hikari: ERROR
+    org.apache.tomcat: ERROR
+    org.eclipse.jetty: ERROR
+
+# ===========================================
+# 애플리케이션별 로깅 제어
+# ===========================================
+autocoin:
+  logging:
+    request-filter:
+      enabled: false
+    api-filter:
+      enabled: false
+      detailed: false
+
+# ===========================================
+# 관리 엔드포인트 최소화
+# ===========================================
+management:
+  endpoints:
+    enabled-by-default: false
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      enabled: true
+      show-details: never
+  metrics:
+    export:
+      prometheus:
+        enabled: false

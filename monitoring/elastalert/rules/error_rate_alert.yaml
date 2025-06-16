@@ -1,0 +1,45 @@
+# 에러 로그 급증 감지
+name: High Error Rate Alert
+type: frequency
+index: autocoin-logs-*
+num_events: 10
+timeframe:
+  minutes: 5
+
+filter:
+- term:
+    level: "ERROR"
+
+alert:
+- "slack"
+
+slack:
+webhook_url: "YOUR_SLACK_WEBHOOK_URL"
+slack_channel_override: "#alerts"
+slack_username_override: "ElastAlert"
+slack_emoji_override: ":exclamation:"
+slack_msg_color: "danger"
+
+alert_text: |
+  🚨 **High Error Rate Detected**
+  
+  **Application**: Autocoin API
+  **Time Range**: Last 5 minutes
+  **Error Count**: {0}
+  **Environment**: {1}
+  
+  **Recent Errors**:
+  {2}
+
+alert_text_args:
+  - num_matches
+  - environment
+  - log_message
+
+include:
+  - timestamp
+  - level
+  - logger
+  - log_message
+  - trace_id
+  - service_component

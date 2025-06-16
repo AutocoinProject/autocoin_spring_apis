@@ -1,0 +1,145 @@
+<<<<<<< Updated upstream
+<<<<<<< HEAD
+# ====================================
+# H2 테스트환경 설정
+# ====================================
+
+=======
+# H2 인메모리 데이터베이스 설정
+>>>>>>> Stashed changes
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
+    
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        format_sql: true
+        show_sql: true
+    show-sql: true
+
+  # OAuth2 비활성화 (H2 개발환경)
+  security:
+    oauth2:
+      client:
+        registration: {}
+        provider: {}
+
+# OAuth2 비활성화 플래그
+oauth2:
+  enabled: false
+
+# 개발 환경 기본값들
+jwt:
+  secret: development-jwt-secret-key-for-testing-32-characters-minimum
+  expiration: 86400000
+
+cors:
+  allowed-origins: http://localhost:3000,http://localhost:8080
+  allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+  allowed-headers: Authorization,Content-Type,X-Requested-With
+  max-age: 3600
+
+# 모니터링 비활성화 (개발용)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# 로깅 간소화
+logging:
+  level:
+    com.autocoin: INFO
+    org.springframework.web: WARN
+    org.hibernate.SQL: WARN
+    org.springframework.security: WARN
+
+# Swagger 활성화
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+
+# AWS S3 대체 설정 (개발용 - 실제 S3 연결 없이도 작동)
+cloud:
+  aws:
+    credentials:
+      access-key: fake-access-key
+      secret-key: fake-secret-key
+    s3:
+      bucket: fake-bucket
+    region:
+      static: ap-northeast-2
+    stack:
+      auto: false
+
+# Sentry 비활성화
+sentry:
+  dsn: ""
+
+<<<<<<< Updated upstream
+# 테스트용 설정
+test:
+  database:
+    cleanup: true
+=======
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: 
+    driver-class-name: org.h2.Driver
+  
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        format_sql: true
+    show-sql: true
+
+cloud:
+  aws:
+    s3:
+      bucket: ${S3_BUCKET:your-dev-s3-bucket}
+    credentials:
+      access-key: ${AWS_ACCESS_KEY:your-dev-aws-access-key}
+      secret-key: ${AWS_SECRET_KEY:your-dev-aws-secret-key}
+    region:
+      static: ${AWS_REGION:ap-northeast-2}
+    stack:
+      auto: false
+>>>>>>> feature/로그인회원가입게시글작성완료
+=======
+# Slack 알림 비활성화
+slack:
+  notifications:
+    enabled: false
+
+# 파일 업로드 설정 (S3 연결 실패시 대안)
+file:
+  upload:
+    enabled: true
+    fallback-mode: true  # S3 실패시 로컬 저장 또는 건너뛰기
+>>>>>>> Stashed changes
