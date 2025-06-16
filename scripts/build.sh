@@ -1,7 +1,4 @@
 #!/bin/bash
-
-echo "🔨 Autocoin API 빌드 중..."
-
+echo "🔨 Building Autocoin API..."
 ./gradlew clean build -x test
-
-echo "✅ 빌드 완료!"
+echo "✅ Build completed!"
