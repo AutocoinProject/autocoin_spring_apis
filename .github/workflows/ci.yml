@@ -81,26 +81,27 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            # 기존 컨테이너 중지
-            docker stop autocoin-api || true
-            docker rm autocoin-api || true
-            
-            # 새 이미지 pull & 실행
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            docker pull ghcr.io/${{ env.IMAGE_NAME }}:latest
-            
-            docker run -d \
-              --name autocoin-api \
-              -p 8080:8080 \
-              --restart unless-stopped \
-              -e DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
-              -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
-              -e UPBIT_ENCRYPTION_KEY="${{ secrets.UPBIT_ENCRYPTION_KEY }}" \
-              ghcr.io/${{ env.IMAGE_NAME }}:latest
+      # EC2 배포 - secrets 설정 후 활성화
+      # - name: Deploy to EC2
+      #   uses: appleboy/ssh-action@v1.0.3
+      #   with:
+      #     host: ${{ secrets.EC2_HOST }}
+      #     username: ${{ secrets.EC2_USER }}
+      #     key: ${{ secrets.EC2_SSH_KEY }}
+      #     script: |
+      #       # 기존 컨테이너 중지
+      #       docker stop autocoin-api || true
+      #       docker rm autocoin-api || true
+      #       
+      #       # 새 이미지 pull & 실행
+      #       echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      #       docker pull ghcr.io/${{ env.IMAGE_NAME }}:latest
+      #       
+      #       docker run -d \
+      #         --name autocoin-api \
+      #         -p 8080:8080 \
+      #         --restart unless-stopped \
+      #         -e DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
+      #         -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+      #         -e UPBIT_ENCRYPTION_KEY="${{ secrets.UPBIT_ENCRYPTION_KEY }}" \
+      #         ghcr.io/${{ env.IMAGE_NAME }}:latest
