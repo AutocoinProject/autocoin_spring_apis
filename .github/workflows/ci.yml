@@ -81,27 +81,29 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # EC2 배포 - secrets 설정 후 활성화
-      # - name: Deploy to EC2
-      #   uses: appleboy/ssh-action@v1.0.3
-      #   with:
-      #     host: ${{ secrets.EC2_HOST }}
-      #     username: ${{ secrets.EC2_USER }}
-      #     key: ${{ secrets.EC2_SSH_KEY }}
-      #     script: |
-      #       # 기존 컨테이너 중지
-      #       docker stop autocoin-api || true
-      #       docker rm autocoin-api || true
-      #       
-      #       # 새 이미지 pull & 실행
-      #       echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-      #       docker pull ghcr.io/${{ env.IMAGE_NAME }}:latest
-      #       
-      #       docker run -d \
-      #         --name autocoin-api \
-      #         -p 8080:8080 \
-      #         --restart unless-stopped \
-      #         -e DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
-      #         -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
-      #         -e UPBIT_ENCRYPTION_KEY="${{ secrets.UPBIT_ENCRYPTION_KEY }}" \
-      #         ghcr.io/${{ env.IMAGE_NAME }}:latest
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # 배포 디렉토리로 이동
+            cd /home/ubuntu/autocoin-deployment
+            
+            # GitHub Container Registry 로그인
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            # 최신 이미지 pull
+            docker pull ghcr.io/${{ env.IMAGE_NAME }}:latest
+            
+            # Docker Compose로 배포 (production 설정 사용)
+            docker-compose -f docker-compose.yml down || true
+            docker-compose -f docker-compose.yml up -d
+            
+            # 헬스체크
+            sleep 30
+            curl -f http://localhost:8080/actuator/health || exit 1
+            
+            # 사용하지 않는 이미지 정리
+            docker image prune -f

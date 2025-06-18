@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  # ====================================
+  # Autocoin Spring API Application
+  # ====================================
+  autocoin-api:
+    image: ghcr.io/autocoinproject/autocoin-api:latest
+    container_name: autocoin-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - DB_HOST=${DB_HOST:-autocoin.cz7dv3rknd8e.us-east-1.rds.amazonaws.com}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_NAME=${DB_NAME:-autocoin_prod_db}
+      - DB_USERNAME=${DB_USERNAME:-admin}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION=${JWT_EXPIRATION:-3600000}
+      - JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION:-86400000}
+      - UPBIT_ENCRYPTION_KEY=${UPBIT_ENCRYPTION_KEY}
+      - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
+      - AWS_SECRET_KEY=${AWS_SECRET_KEY}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET}
+      - AWS_REGION=${AWS_REGION:-ap-northeast-2}
+      - SERP_API_KEY=${SERP_API_KEY}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+      - SLACK_NOTIFICATIONS_ENABLED=${SLACK_NOTIFICATIONS_ENABLED:-true}
+      - SENTRY_DSN=${SENTRY_DSN}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-*}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - OAUTH2_ENABLED=${OAUTH2_ENABLED:-false}
+      - APP_VERSION=${APP_VERSION:-1.0.0}
+    volumes:
+      - app-logs:/app/logs
+      - app-temp:/app/temp
+    networks:
+      - autocoin-network
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ====================================
+  # Redis Cache
+  # ====================================
+  redis:
+    image: redis:7-alpine
+    container_name: autocoin-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-defaultpassword}
+    volumes:
+      - redis-data:/data
+    networks:
+      - autocoin-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  app-logs:
+    driver: local
+  app-temp:
+    driver: local
+  redis-data:
+    driver: local
+
+networks:
+  autocoin-network:
+    driver: bridge
