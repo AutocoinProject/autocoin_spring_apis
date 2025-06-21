@@ -90,6 +90,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           timeout: 300s
+          use_insecure_cipher: true
           script: |
             # 배포 디렉토리 생성
             mkdir -p /home/ec2-user/autocoin-deployment
@@ -101,7 +102,7 @@ jobs:
             curl -o docker-compose.prod.yml https://raw.githubusercontent.com/${{ github.repository }}/main/docker-compose.prod.yml
             
             # .env 파일 생성
-            cat > .env << EOF
+            cat > .env << 'ENVEOF'
             # Database
             DB_HOST=${{ secrets.DB_HOST }}
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
@@ -122,7 +123,7 @@ jobs:
             SERP_API_KEY=${{ secrets.SERP_API_KEY }}
             SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
             SENTRY_DSN=${{ secrets.SENTRY_DSN }}
-            EOF
+            ENVEOF
             
             # GitHub Container Registry 로그인
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
