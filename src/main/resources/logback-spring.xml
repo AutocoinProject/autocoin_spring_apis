@@ -46,94 +46,23 @@
         </appender>
     </springProfile>
 
-    <!-- 파일 출력 (항상 JSON) -->
-    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>logs/autocoin.log</file>
-        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
-            <includeContext>true</includeContext>
-            <includeMdc>true</includeMdc>
-            <customFields>{"application":"autocoin-api","environment":"${spring.profiles.active:-local}"}</customFields>
-            <fieldNames>
-                <timestamp>@timestamp</timestamp>
-                <message>message</message>
-                <logger>logger</logger>
-                <thread>thread</thread>
-                <level>level</level>
-            </fieldNames>
-        </encoder>
-        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <fileNamePattern>logs/autocoin.%d{yyyy-MM-dd}.%i.gz</fileNamePattern>
-            <maxFileSize>100MB</maxFileSize>
-            <maxHistory>30</maxHistory>
-            <totalSizeCap>3GB</totalSizeCap>
-        </rollingPolicy>
-    </appender>
-
-    <!-- TCP Appender (프로덕션에서만) -->
-    <springProfile name="prod">
-        <appender name="TCP" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
-            <destination>logstash:5000</destination>
-            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
-                <includeContext>true</includeContext>
-                <includeMdc>true</includeMdc>
-                <customFields>{"application":"autocoin-api","environment":"${spring.profiles.active:-local}"}</customFields>
-            </encoder>
-            <connectionStrategy>
-                <roundRobin>
-                    <connectionTTL>5 minutes</connectionTTL>
-                </roundRobin>
-            </connectionStrategy>
-        </appender>
-    </springProfile>
-
-    <!-- 에러 전용 파일 -->
-    <appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>logs/autocoin-errors.log</file>
-        <filter class="ch.qos.logback.classic.filter.LevelFilter">
-            <level>ERROR</level>
-            <onMatch>ACCEPT</onMatch>
-            <onMismatch>DENY</onMismatch>
-        </filter>
-        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
-            <includeContext>true</includeContext>
-            <includeMdc>true</includeMdc>
-            <customFields>{"application":"autocoin-api","log_type":"error"}</customFields>
-        </encoder>
-        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <fileNamePattern>logs/autocoin-errors.%d{yyyy-MM-dd}.%i.gz</fileNamePattern>
-            <maxFileSize>50MB</maxFileSize>
-            <maxHistory>90</maxHistory>
-            <totalSizeCap>1GB</totalSizeCap>
-        </rollingPolicy>
-    </appender>
-
-    <!-- 개발 환경 -->
+    <!-- 개발 환경 - 콘솔만 사용 -->
     <springProfile name="local,dev">
         <root level="INFO">
             <appender-ref ref="CONSOLE"/>
-            <appender-ref ref="FILE"/>
-            <appender-ref ref="ERROR_FILE"/>
         </root>
     </springProfile>
 
-    <!-- 운영 환경 -->
+    <!-- 운영 환경 - 콘솔만 사용 -->
     <springProfile name="prod">
         <root level="WARN">
             <appender-ref ref="CONSOLE"/>
-            <appender-ref ref="FILE"/>
-            <appender-ref ref="TCP"/>
-            <appender-ref ref="ERROR_FILE"/>
         </root>
     </springProfile>
 
     <!-- 특별한 로거들 -->
-    <logger name="com.autocoin.global.filter" level="WARN" additivity="false">
-        <appender-ref ref="FILE"/>
-    </logger>
-    
     <logger name="com.autocoin.upbit" level="INFO" additivity="false">
         <appender-ref ref="CONSOLE"/>
-        <appender-ref ref="FILE"/>
     </logger>
 
     <!-- 불필요한 로그 제거 -->
