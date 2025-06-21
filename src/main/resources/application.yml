@@ -54,15 +54,9 @@ spring:
     oauth2:
       client:
         registration:
-          google:
-            client-id: ${GOOGLE_CLIENT_ID:}
-            client-secret: ${GOOGLE_CLIENT_SECRET:}
-            scope:
-              - email
-              - profile
           kakao:
-            client-id: ${KAKAO_CLIENT_ID:}
-            client-secret: ${KAKAO_CLIENT_SECRET:}
+            client-id: ${KAKAO_CLIENT_ID}
+            client-secret: ${KAKAO_CLIENT_SECRET}
             redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
             client-authentication-method: client_secret_post
             authorization-grant-type: authorization_code
@@ -171,9 +165,9 @@ cloud:
     stack:
       auto: ${AWS_STACK_AUTO:false}
 
-# OAuth2 설정 (조건부 활성화)
+# OAuth2 설정 (활성화)
 oauth2:
-  enabled: ${OAUTH2_ENABLED:false}
+  enabled: ${OAUTH2_ENABLED:true}
   redirect-uri: ${OAUTH2_REDIRECT_URI:http://localhost:3000/oauth2/redirect}
 
 # Flask API 연동 설정

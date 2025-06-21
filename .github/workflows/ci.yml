@@ -108,7 +108,7 @@ jobs:
             # docker-compose 파일 다운로드
             curl -o docker-compose.prod.yml https://raw.githubusercontent.com/${{ github.repository }}/main/docker-compose.prod.yml
             
-            # .env 파일 생성 (누락된 변수들 추가)
+            # .env 파일 생성 (OAuth2 설정 포함)
             cat > .env << 'ENVEOF'
             # Database
             DB_HOST=${{ secrets.DB_HOST }}
@@ -131,16 +131,16 @@ jobs:
             SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
             SENTRY_DSN=${{ secrets.SENTRY_DSN }}
             
+            # OAuth2 설정 (Kakao 활성화, Google 추후)
+            OAUTH2_ENABLED=true
+            KAKAO_CLIENT_ID=${{ secrets.KAKAO_CLIENT_ID }}
+            KAKAO_CLIENT_SECRET=${{ secrets.KAKAO_CLIENT_SECRET }}
+            GOOGLE_CLIENT_ID=
+            GOOGLE_CLIENT_SECRET=
+            
             # Redis (빈 값으로 설정하여 경고 제거)
             REDIS_HOST=
             REDIS_PASSWORD=
-            
-            # OAuth2 (빈 값으로 설정하여 경고 제거)
-            GOOGLE_CLIENT_ID=
-            GOOGLE_CLIENT_SECRET=
-            KAKAO_CLIENT_ID=
-            KAKAO_CLIENT_SECRET=
-            OAUTH2_ENABLED=false
             
             # Additional settings
             CORS_ALLOWED_ORIGINS=*
