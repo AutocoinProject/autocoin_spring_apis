@@ -1,11 +1,11 @@
-name: CI/CD
+name: CI/CD with SSM
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-  workflow_dispatch:  # 수동 실행 가능
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -82,108 +82,84 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Test SSH Connection
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: 22
-          timeout: 60s
-          script: |
-            echo "SSH connection successful!"
-            echo "Current user: $(whoami)"
-            echo "Current directory: $(pwd)"
-            echo "Docker version: $(docker --version)"
-            echo "Docker Compose version: $(docker-compose --version)"
-            echo "Checking deployment directory..."
-            ls -la /home/ec2-user/ | grep autocoin || echo "autocoin-deployment directory not found"
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: ap-northeast-2
 
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: 22
-          timeout: 300s
-          script: |
-            # 배포 디렉토리 생성
-            mkdir -p /home/ec2-user/autocoin-deployment
-            mkdir -p /home/ec2-user/autocoin-logs
-            mkdir -p /home/ec2-user/autocoin-temp
-            cd /home/ec2-user/autocoin-deployment
+      - name: Deploy to EC2 via SSM
+        run: |
+          # SSM을 통해 EC2에 배포 스크립트 실행
+          aws ssm send-command \
+            --instance-ids "i-09f9b0cd2b6a81741" \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=[
+              "echo \"Starting deployment...\"",
+              "mkdir -p /home/ec2-user/autocoin-deployment",
+              "mkdir -p /home/ec2-user/autocoin-logs", 
+              "mkdir -p /home/ec2-user/autocoin-temp",
+              "cd /home/ec2-user/autocoin-deployment",
+              "curl -o docker-compose.prod.yml https://raw.githubusercontent.com/${{ github.repository }}/main/docker-compose.prod.yml",
+              "cat > .env << EOF",
+              "DB_HOST=${{ secrets.DB_HOST }}",
+              "DB_PASSWORD=${{ secrets.DB_PASSWORD }}",
+              "DB_USERNAME=${{ secrets.DB_USERNAME }}",
+              "DB_NAME=${{ secrets.DB_NAME }}",
+              "DB_PORT=${{ secrets.DB_PORT }}",
+              "JWT_SECRET=${{ secrets.JWT_SECRET }}",
+              "UPBIT_ENCRYPTION_KEY=${{ secrets.UPBIT_ENCRYPTION_KEY }}",
+              "AWS_ACCESS_KEY=${{ secrets.AWS_ACCESS_KEY }}",
+              "AWS_SECRET_KEY=${{ secrets.AWS_SECRET_KEY }}",
+              "AWS_S3_BUCKET=${{ secrets.AWS_S3_BUCKET }}",
+              "SERP_API_KEY=${{ secrets.SERP_API_KEY }}",
+              "SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}",
+              "SENTRY_DSN=${{ secrets.SENTRY_DSN }}",
+              "EOF",
+              "echo \"${{ secrets.GITHUB_TOKEN }}\" | docker login ghcr.io -u ${{ github.actor }} --password-stdin",
+              "docker pull ghcr.io/${{ env.IMAGE_NAME }}:latest",
+              "docker-compose -f docker-compose.prod.yml down || true",
+              "docker-compose -f docker-compose.prod.yml up -d autocoin-api",
+              "sleep 45",
+              "curl -f http://localhost:8080/actuator/health || exit 1",
+              "docker image prune -f",
+              "echo \"Deployment completed successfully!\""
+            ]' \
+            --output text \
+            --query "Command.CommandId" > command_id.txt
+          
+          # 명령 실행 결과 대기 및 확인
+          COMMAND_ID=$(cat command_id.txt)
+          echo "Command ID: $COMMAND_ID"
+          
+          # 명령 완료까지 대기 (최대 10분)
+          for i in {1..60}; do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "i-09f9b0cd2b6a81741" \
+              --query "Status" --output text)
             
-            # docker-compose 파일 다운로드
-            curl -o docker-compose.prod.yml https://raw.githubusercontent.com/${{ github.repository }}/main/docker-compose.prod.yml
+            echo "Command status: $STATUS"
             
-            # .env 파일 생성
-            cat > .env << EOF
-            # Database
-            DB_HOST=${{ secrets.DB_HOST }}
-            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-            DB_USERNAME=${{ secrets.DB_USERNAME || 'admin' }}
-            DB_NAME=${{ secrets.DB_NAME || 'autocoin' }}
+            if [ "$STATUS" = "Success" ]; then
+              echo "✅ Deployment successful!"
+              aws ssm get-command-invocation \
+                --command-id "$COMMAND_ID" \
+                --instance-id "i-09f9b0cd2b6a81741" \
+                --query "StandardOutputContent" --output text
+              break
+            elif [ "$STATUS" = "Failed" ]; then
+              echo "❌ Deployment failed!"
+              aws ssm get-command-invocation \
+                --command-id "$COMMAND_ID" \
+                --instance-id "i-09f9b0cd2b6a81741" \
+                --query "StandardErrorContent" --output text
+              exit 1
+            elif [ "$i" -eq 60 ]; then
+              echo "⏰ Deployment timeout!"
+              exit 1
+            fi
             
-            # Security
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
-            UPBIT_ENCRYPTION_KEY=${{ secrets.UPBIT_ENCRYPTION_KEY }}
-            
-            # AWS (optional)
-            AWS_ACCESS_KEY=${{ secrets.AWS_ACCESS_KEY }}
-            AWS_SECRET_KEY=${{ secrets.AWS_SECRET_KEY }}
-            AWS_S3_BUCKET=${{ secrets.AWS_S3_BUCKET }}
-            
-            # APIs (optional)
-            SERP_API_KEY=${{ secrets.SERP_API_KEY }}
-            SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
-            SENTRY_DSN=${{ secrets.SENTRY_DSN }}
-            
-            # Redis (optional)
-            REDIS_HOST=${{ secrets.REDIS_HOST }}
-            REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
-            
-            # OAuth2 (optional)
-            GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
-            GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
-            KAKAO_CLIENT_ID=${{ secrets.KAKAO_CLIENT_ID }}
-            KAKAO_CLIENT_SECRET=${{ secrets.KAKAO_CLIENT_SECRET }}
-            EOF
-            
-            # GitHub Container Registry 로그인
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            
-            # 최신 이미지 pull
-            docker pull ghcr.io/${{ env.IMAGE_NAME }}:latest
-            
-            # Docker Compose로 배포
-            docker-compose -f docker-compose.prod.yml down || true
-            docker-compose -f docker-compose.prod.yml up -d autocoin-api
-            
-            # 컨테이너 시작 대기
-            echo "Waiting for application to start..."
-            sleep 45
-            
-            # 헬스체크 (최대 3번 시도)
-            for i in {1..3}; do
-              echo "Health check attempt $i/3..."
-              if curl -f http://localhost:8080/actuator/health; then
-                echo "✅ Health check passed!"
-                break
-              elif [ $i -eq 3 ]; then
-                echo "❌ Health check failed after 3 attempts"
-                docker-compose -f docker-compose.prod.yml logs autocoin-api --tail 50
-                exit 1
-              else
-                echo "Health check failed, retrying in 15 seconds..."
-                sleep 15
-              fi
-            done
-            
-            # 컨테이너 상태 확인
-            docker-compose -f docker-compose.prod.yml ps
-            
-            # 사용하지 않는 이미지 정리
-            docker image prune -f
-            
-            echo "🚀 Deployment completed successfully!"
+            sleep 10
+          done

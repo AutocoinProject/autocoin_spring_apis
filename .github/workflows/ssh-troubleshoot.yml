@@ -1,0 +1,52 @@
+name: SSH Key Troubleshooting
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create-new-ssh-key:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate New SSH Key Pair
+        run: |
+          # 새로운 SSH 키 페어 생성
+          ssh-keygen -t rsa -b 4096 -f ./new_ec2_key -N ""
+          
+          echo "=== 새로운 Public Key ==="
+          cat ./new_ec2_key.pub
+          echo ""
+          echo "=== 새로운 Private Key ==="
+          cat ./new_ec2_key
+          
+          echo ""
+          echo "🔧 설정 방법:"
+          echo "1. 위의 Public Key를 복사"
+          echo "2. EC2 인스턴스에 SSH로 접속"
+          echo "3. ~/.ssh/authorized_keys에 Public Key 추가"
+          echo "4. GitHub Secrets EC2_SSH_KEY에 Private Key 설정"
+
+  test-current-key:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test Current SSH Key Format
+        run: |
+          echo "현재 설정된 SSH 키 테스트"
+          echo "${{ secrets.EC2_SSH_KEY }}" > test_key
+          chmod 600 test_key
+          
+          # SSH 키 형식 검증
+          ssh-keygen -l -f test_key || echo "❌ SSH 키 형식이 잘못되었습니다"
+          
+          # SSH 키 정보 출력
+          ssh-keygen -y -f test_key || echo "❌ SSH 키에서 public key를 추출할 수 없습니다"
+
+  direct-docker-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Alternative - Direct Docker Deployment
+        run: |
+          echo "SSH 없이 EC2에 직접 배포하는 대안:"
+          echo "1. GitHub Actions에서 Docker 이미지 빌드 ✅"
+          echo "2. EC2에서 cron job으로 최신 이미지 자동 pull"
+          echo "3. 또는 AWS CodeDeploy 사용"
+          echo "4. 또는 AWS ECS/Fargate로 이전"
