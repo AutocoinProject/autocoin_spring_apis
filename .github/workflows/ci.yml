@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:  # 수동 실행 가능
 
 env:
   REGISTRY: ghcr.io
@@ -81,15 +82,35 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Test SSH Connection
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          timeout: 60
+          script: |
+            echo "SSH connection successful!"
+            echo "Current user: $(whoami)"
+            echo "Current directory: $(pwd)"
+            echo "Docker version: $(docker --version)"
+            echo "Docker Compose version: $(docker-compose --version)"
+            echo "Checking deployment directory..."
+            ls -la /home/ec2-user/ | grep autocoin || echo "autocoin-deployment directory not found"
+
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          timeout: 300
           script: |
-            # 배포 디렉토리로 이동
-            cd /home/ubuntu/autocoin-deployment
+            # 배포 디렉토리 생성 (없는 경우)
+            mkdir -p /home/ec2-user/autocoin-deployment
+            cd /home/ec2-user/autocoin-deployment
             
             # GitHub Container Registry 로그인
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -97,12 +118,21 @@ jobs:
             # 최신 이미지 pull
             docker pull ghcr.io/${{ env.IMAGE_NAME }}:latest
             
-            # Docker Compose로 배포 (production 설정 사용)
-            docker-compose -f docker-compose.yml down || true
-            docker-compose -f docker-compose.yml up -d
+            # 기존 컨테이너 중지 및 제거 (있는 경우)
+            docker stop autocoin-api || true
+            docker rm autocoin-api || true
+            
+            # 새 컨테이너 실행
+            docker run -d \
+              --name autocoin-api \
+              --restart unless-stopped \
+              -p 8080:8080 \
+              ghcr.io/${{ env.IMAGE_NAME }}:latest
+            
+            # 컨테이너 시작 대기
+            sleep 30
             
             # 헬스체크
-            sleep 30
             curl -f http://localhost:8080/actuator/health || exit 1
             
             # 사용하지 않는 이미지 정리
