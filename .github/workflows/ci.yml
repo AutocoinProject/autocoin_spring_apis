@@ -108,9 +108,47 @@ jobs:
           port: 22
           timeout: 300s
           script: |
-            # 배포 디렉토리 생성 (없는 경우)
+            # 배포 디렉토리 생성
             mkdir -p /home/ec2-user/autocoin-deployment
+            mkdir -p /home/ec2-user/autocoin-logs
+            mkdir -p /home/ec2-user/autocoin-temp
             cd /home/ec2-user/autocoin-deployment
+            
+            # docker-compose 파일 다운로드
+            curl -o docker-compose.prod.yml https://raw.githubusercontent.com/${{ github.repository }}/main/docker-compose.prod.yml
+            
+            # .env 파일 생성
+            cat > .env << EOF
+            # Database
+            DB_HOST=${{ secrets.DB_HOST }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_USERNAME=${{ secrets.DB_USERNAME || 'admin' }}
+            DB_NAME=${{ secrets.DB_NAME || 'autocoin' }}
+            
+            # Security
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            UPBIT_ENCRYPTION_KEY=${{ secrets.UPBIT_ENCRYPTION_KEY }}
+            
+            # AWS (optional)
+            AWS_ACCESS_KEY=${{ secrets.AWS_ACCESS_KEY }}
+            AWS_SECRET_KEY=${{ secrets.AWS_SECRET_KEY }}
+            AWS_S3_BUCKET=${{ secrets.AWS_S3_BUCKET }}
+            
+            # APIs (optional)
+            SERP_API_KEY=${{ secrets.SERP_API_KEY }}
+            SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
+            SENTRY_DSN=${{ secrets.SENTRY_DSN }}
+            
+            # Redis (optional)
+            REDIS_HOST=${{ secrets.REDIS_HOST }}
+            REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
+            
+            # OAuth2 (optional)
+            GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+            GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
+            KAKAO_CLIENT_ID=${{ secrets.KAKAO_CLIENT_ID }}
+            KAKAO_CLIENT_SECRET=${{ secrets.KAKAO_CLIENT_SECRET }}
+            EOF
             
             # GitHub Container Registry 로그인
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -118,22 +156,34 @@ jobs:
             # 최신 이미지 pull
             docker pull ghcr.io/${{ env.IMAGE_NAME }}:latest
             
-            # 기존 컨테이너 중지 및 제거 (있는 경우)
-            docker stop autocoin-api || true
-            docker rm autocoin-api || true
-            
-            # 새 컨테이너 실행
-            docker run -d \
-              --name autocoin-api \
-              --restart unless-stopped \
-              -p 8080:8080 \
-              ghcr.io/${{ env.IMAGE_NAME }}:latest
+            # Docker Compose로 배포
+            docker-compose -f docker-compose.prod.yml down || true
+            docker-compose -f docker-compose.prod.yml up -d autocoin-api
             
             # 컨테이너 시작 대기
-            sleep 30
+            echo "Waiting for application to start..."
+            sleep 45
             
-            # 헬스체크
-            curl -f http://localhost:8080/actuator/health || exit 1
+            # 헬스체크 (최대 3번 시도)
+            for i in {1..3}; do
+              echo "Health check attempt $i/3..."
+              if curl -f http://localhost:8080/actuator/health; then
+                echo "✅ Health check passed!"
+                break
+              elif [ $i -eq 3 ]; then
+                echo "❌ Health check failed after 3 attempts"
+                docker-compose -f docker-compose.prod.yml logs autocoin-api --tail 50
+                exit 1
+              else
+                echo "Health check failed, retrying in 15 seconds..."
+                sleep 15
+              fi
+            done
+            
+            # 컨테이너 상태 확인
+            docker-compose -f docker-compose.prod.yml ps
             
             # 사용하지 않는 이미지 정리
             docker image prune -f
+            
+            echo "🚀 Deployment completed successfully!"

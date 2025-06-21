@@ -2,17 +2,17 @@ version: '3.8'
 
 services:
   # ====================================
-  # Autocoin Spring API
+  # Autocoin Spring API (Development)
   # ====================================
   autocoin-api:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile
-    container_name: autocoin-api
+    container_name: autocoin-api-dev
     ports:
       - "8080:8080"
     env_file:
-      - .env
+      - ../.env
     networks:
       - autocoin-network
     restart: unless-stopped
@@ -24,13 +24,15 @@ services:
       start_period: 60s
     depends_on:
       - redis
+    volumes:
+      - ../logs:/app/logs
 
   # ====================================
-  # Redis
+  # Redis (Development)
   # ====================================
   redis:
     image: redis:7.0-alpine
-    container_name: autocoin-redis
+    container_name: autocoin-redis-dev
     ports:
       - "6379:6379"
     command: redis-server --save 20 1 --loglevel warning

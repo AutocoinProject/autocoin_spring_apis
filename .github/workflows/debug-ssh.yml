@@ -1,0 +1,49 @@
+name: Debug SSH Connection
+
+on:
+  workflow_dispatch:  # 수동 실행만 가능
+
+jobs:
+  debug-ssh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test SSH Connection with Debug
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          timeout: 60s
+          debug: true
+          script: |
+            echo "=== SSH CONNECTION SUCCESSFUL ==="
+            echo "Current user: $(whoami)"
+            echo "Current directory: $(pwd)"
+            echo "Home directory contents:"
+            ls -la ~
+            echo "=== SYSTEM INFO ==="
+            uname -a
+            echo "=== DOCKER INFO ==="
+            docker --version || echo "Docker not installed"
+            docker-compose --version || echo "Docker Compose not installed"
+            which docker-compose || echo "docker-compose not found in PATH"
+            echo "=== NETWORK INFO ==="
+            curl -I https://github.com || echo "GitHub not reachable"
+            echo "=== DISK SPACE ==="
+            df -h
+            echo "=== DONE ==="
+
+      - name: Test SSH with Different Configs
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          timeout: 30s
+          use_insecure_cipher: true
+          script: |
+            echo "Alternative SSH config worked!"
+            id
+            pwd
